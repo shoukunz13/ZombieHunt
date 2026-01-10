@@ -323,10 +323,12 @@ export function LobbyScreen() {
                 onClose={() => setShowRulebook(false)}
             />
 
+
             {/* Game Start Alert */}
-            {showGameStart && (
+            {showGameStart && privateState && (
                 <GameStartAlert
                     round={gameState?.round || 1}
+                    role={privateState.role as 'human' | 'zombie'}
                     onComplete={() => setShowGameStart(false)}
                 />
             )}
