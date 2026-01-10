@@ -1,215 +1,260 @@
 /**
- * Shared Components
+ * ZOMBIE HUNT — Shared Components
+ * Alice in Borderland Theme
+ * 
+ * Minimalist, oppressive, high-contrast
  */
 
-import React, { useEffect, useState } from 'react';
-import { NumberCard, Suit } from '../types';
+import { NumberCard } from '../types';
 
-// ============ Connection Status ============
-
-interface ConnectionStatusProps {
-    isConnected: boolean;
-}
-
-export function ConnectionStatus({ isConnected }: ConnectionStatusProps) {
+/* ============================================
+   CONNECTION STATUS
+   ============================================ */
+export function ConnectionStatus({ isConnected }: { isConnected: boolean }) {
     return (
-        <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
-            <span className="connection-dot"></span>
-            {isConnected ? 'Connected' : 'Disconnected'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span
+                className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}
+            />
+            <span className="text-system" style={{ fontSize: '0.625rem' }}>
+                {isConnected ? 'LIVE' : 'OFFLINE'}
+            </span>
         </div>
     );
 }
 
-// ============ Timer ============
-
-interface TimerProps {
-    endsAt: number;
-}
-
-export function Timer({ endsAt }: TimerProps) {
-    const [timeLeft, setTimeLeft] = useState<number>(0);
+/* ============================================
+   TIMER — Large aggressive countdown
+   ============================================ */
+export function Timer({ endsAt }: { endsAt: number }) {
+    const [timeLeft, setTimeLeft] = useState(Math.max(0, endsAt - Date.now()));
 
     useEffect(() => {
-        const update = () => {
-            const remaining = Math.max(0, Math.floor((endsAt - Date.now()) / 1000));
+        const interval = setInterval(() => {
+            const remaining = Math.max(0, endsAt - Date.now());
             setTimeLeft(remaining);
-        };
-
-        update();
-        const interval = setInterval(update, 1000);
-
+            if (remaining <= 0) clearInterval(interval);
+        }, 100);
         return () => clearInterval(interval);
     }, [endsAt]);
 
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-
-    let className = 'timer';
-    if (timeLeft <= 10) className += ' danger';
-    else if (timeLeft <= 30) className += ' warning';
+    const seconds = Math.ceil(timeLeft / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const isWarning = seconds <= 10;
 
     return (
-        <div className={className}>
-            {minutes}:{seconds.toString().padStart(2, '0')}
+        <div className={`timer ${isWarning ? 'warning' : ''}`}>
+            {String(minutes).padStart(2, '0')}:{String(secs).padStart(2, '0')}
         </div>
     );
 }
 
-// ============ Playing Card ============
+import { useState, useEffect, ReactNode } from 'react';
 
-interface PlayingCardProps {
+/* ============================================
+   PLAYING CARD — Classified document style
+   ============================================ */
+export function PlayingCardComponent({
+    card,
+    selected = false,
+    disabled = false,
+    onClick
+}: {
     card: NumberCard;
     selected?: boolean;
-    onClick?: () => void;
     disabled?: boolean;
-}
+    onClick?: () => void;
+}) {
+    const suitSymbol = {
+        hearts: '♥',
+        diamonds: '♦',
+        clubs: '♣',
+        spades: '♠'
+    }[card.suit];
 
-const suitSymbols: Record<Suit, string> = {
-    hearts: '♥',
-    diamonds: '♦',
-    clubs: '♣',
-    spades: '♠',
-};
+    const valueDisplay = card.value === 1 ? 'A' :
+        card.value === 11 ? 'J' :
+            card.value === 12 ? 'Q' :
+                card.value === 13 ? 'K' :
+                    String(card.value);
 
-export function PlayingCardComponent({ card, selected, onClick, disabled }: PlayingCardProps) {
+    const suitClass = `suit-${card.suit}`;
+
     return (
         <div
-            className={`playing-card ${card.suit} ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+            className={`playing-card ${suitClass} ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
             onClick={disabled ? undefined : onClick}
         >
-            <span className="value">{card.value}</span>
-            <span className="suit">{suitSymbols[card.suit]}</span>
+            <span className="playing-card-value">{valueDisplay}</span>
+            <span className="playing-card-suit">{suitSymbol}</span>
         </div>
     );
 }
 
-// ============ Special Card ============
-
-interface SpecialCardProps {
+/* ============================================
+   SPECIAL CARD — Red highlighted
+   ============================================ */
+export function SpecialCardComponent({
+    type,
+    selected = false,
+    disabled = false,
+    onClick
+}: {
     type: 'zombie' | 'vaccine' | 'shotgun';
     selected?: boolean;
-    onClick?: () => void;
     disabled?: boolean;
-}
+    onClick?: () => void;
+}) {
+    const config = {
+        zombie: { icon: '☠', label: 'INFECT' },
+        vaccine: { icon: '✚', label: 'CURE' },
+        shotgun: { icon: '×', label: 'KILL' }
+    }[type];
 
-const specialIcons: Record<string, string> = {
-    zombie: '🧟',
-    vaccine: '💉',
-    shotgun: '🔫',
-};
-
-const specialLabels: Record<string, string> = {
-    zombie: 'Zombie',
-    vaccine: 'Vaccine',
-    shotgun: 'Shotgun',
-};
-
-export function SpecialCardComponent({ type, selected, onClick, disabled }: SpecialCardProps) {
     return (
         <div
-            className={`special-card ${type} ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+            className={`special-card ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
             onClick={disabled ? undefined : onClick}
-            style={{ opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
         >
-            <span style={{ fontSize: '24px' }}>{specialIcons[type]}</span>
-            <span>{specialLabels[type]}</span>
+            <span className="special-card-icon">{config.icon}</span>
+            <span className="special-card-label">{config.label}</span>
         </div>
     );
 }
 
-// ============ Role Badge ============
-
-interface RoleBadgeProps {
-    role: 'human' | 'zombie';
-}
-
-export function RoleBadge({ role }: RoleBadgeProps) {
+/* ============================================
+   ROLE BADGE
+   ============================================ */
+export function RoleBadge({ role }: { role: 'human' | 'zombie' }) {
     return (
-        <div className={`role-badge role-${role}`}>
-            {role === 'zombie' ? '🧟 Zombie' : '👤 Human'}
-        </div>
-    );
-}
-
-// ============ Status Badge ============
-
-interface StatusBadgeProps {
-    status: 'alive' | 'dead' | 'paired' | 'waiting';
-    label?: string;
-}
-
-export function StatusBadge({ status, label }: StatusBadgeProps) {
-    return (
-        <span className={`status-badge status-${status}`}>
-            {label || status}
+        <span className={`role-badge ${role}`}>
+            {role === 'zombie' ? 'INFECTED' : 'SURVIVOR'}
         </span>
     );
 }
 
-// ============ Special Icons ============
+/* ============================================
+   STATUS BADGE
+   ============================================ */
+export function StatusBadge({
+    status,
+    label
+}: {
+    status: 'alive' | 'dead' | 'paired' | 'waiting';
+    label: string;
+}) {
+    return (
+        <span className={`status-badge ${status}`}>
+            {label}
+        </span>
+    );
+}
 
-interface SpecialIconsProps {
+/* ============================================
+   SPECIAL ICONS — Minimal indicators
+   ============================================ */
+export function SpecialIcons({
+    hasZombie,
+    hasVaccine,
+    hasShotgun
+}: {
     hasZombie: boolean;
     hasVaccine: boolean;
     hasShotgun: boolean;
-}
+}) {
+    if (!hasZombie && !hasVaccine && !hasShotgun) {
+        return <span className="text-muted">—</span>;
+    }
 
-export function SpecialIcons({ hasZombie, hasVaccine, hasShotgun }: SpecialIconsProps) {
     return (
-        <div className="special-icons">
-            <span className={`special-icon zombie ${!hasZombie ? 'inactive' : ''}`}>🧟</span>
-            <span className={`special-icon vaccine ${!hasVaccine ? 'inactive' : ''}`}>💉</span>
-            <span className={`special-icon shotgun ${!hasShotgun ? 'inactive' : ''}`}>🔫</span>
-        </div>
+        <span style={{
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.25em',
+            color: 'var(--accent-red)'
+        }}>
+            {hasZombie && '☠'}
+            {hasVaccine && '✚'}
+            {hasShotgun && '×'}
+        </span>
     );
 }
 
-// ============ Event Item ============
-
-interface EventItemProps {
+/* ============================================
+   EVENT ITEM — Anonymous, text-only
+   ============================================ */
+export function EventItem({
+    type,
+    message
+}: {
     type: string;
     message: string;
-}
+}) {
+    const isDanger = type === 'elimination' || type === 'infection' || type === 'shotgun_kill';
 
-const eventIcons: Record<string, string> = {
-    infection: '🦠',
-    cure: '💊',
-    shotgun_fired: '🔫',
-    elimination: '💀',
-    round_start: '🎮',
-    round_end: '🏁',
-};
-
-export function EventItem({ type, message }: EventItemProps) {
     return (
-        <div className="event-item">
-            <span className="event-icon">{eventIcons[type] || '📢'}</span>
-            <span>{message}</span>
+        <div className={`event-item ${isDanger ? 'danger' : ''}`}>
+            {message}
         </div>
     );
 }
 
-// ============ Modal ============
-
-interface ModalProps {
+/* ============================================
+   MODAL — Sharp, high contrast
+   ============================================ */
+export function Modal({
+    title,
+    children,
+    onClose
+}: {
     title: string;
-    children: React.ReactNode;
-    onClose?: () => void;
-}
-
-export function Modal({ title, children, onClose }: ModalProps) {
+    children: ReactNode;
+    onClose: () => void;
+}) {
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()}>
-                <h2 className="modal-title">{title}</h2>
+                <div className="modal-title">{title}</div>
                 {children}
             </div>
         </div>
     );
 }
 
-// ============ Loading Spinner ============
-
+/* ============================================
+   SPINNER
+   ============================================ */
 export function Spinner() {
-    return <div className="spinner"></div>;
+    return <div className="spinner" />;
+}
+
+/* ============================================
+   SYSTEM MESSAGE — Uppercase, intimidating
+   ============================================ */
+export function SystemMessage({ children }: { children: ReactNode }) {
+    return (
+        <p className="text-system" style={{ textAlign: 'center' }}>
+            {children}
+        </p>
+    );
+}
+
+/* ============================================
+   DISPLAY TITLE — Large, aggressive
+   ============================================ */
+export function DisplayTitle({
+    children,
+    size = '2xl'
+}: {
+    children: ReactNode;
+    size?: 'xl' | '2xl' | '3xl' | '4xl' | 'massive';
+}) {
+    return (
+        <h1
+            className="heading-display"
+            style={{ fontSize: `var(--font-size-${size})` }}
+        >
+            {children}
+        </h1>
+    );
 }

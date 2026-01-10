@@ -1,6 +1,11 @@
 /**
- * Zombie Hunt - Duel Screen
- * Players select and play cards during the duel phase.
+ * ZOMBIE HUNT — Duel Screen
+ * 
+ * Design: High stakes confrontation
+ * - Fullscreen countdown at top
+ * - Opponent name centered
+ * - Card grid with red highlights
+ * - Desaturated screen when locked
  */
 
 import { useState, useEffect } from 'react';
@@ -8,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import {
     Timer, PlayingCardComponent, SpecialCardComponent,
-    RoleBadge, Modal
+    RoleBadge, Modal, DisplayTitle, SystemMessage, Spinner
 } from '../components/shared';
 import { ActionType } from '../types';
 
@@ -55,11 +60,9 @@ export function DuelScreen() {
     if (!privateState || !currentDuel) {
         return (
             <div className="container">
-                <div className="screen" style={{ alignItems: 'center', justifyContent: 'center' }}>
-                    <div className="spinner"></div>
-                    <p style={{ marginTop: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
-                        Waiting for duel assignment...
-                    </p>
+                <div className="screen screen-centered">
+                    <Spinner />
+                    <SystemMessage>AWAITING ASSIGNMENT</SystemMessage>
                 </div>
             </div>
         );
@@ -74,7 +77,6 @@ export function DuelScreen() {
             submitAction(selectedAction);
         }
 
-        // Reset selection
         setSelectedAction(null);
         setSelectedCardId(null);
     };
@@ -82,56 +84,64 @@ export function DuelScreen() {
     const canConfirm = selectedAction && (selectedAction !== 'number' || selectedCardId);
 
     return (
-        <div className="container">
+        <div className={`container ${hasSubmittedAction ? 'desaturated' : ''}`}>
             <div className="screen">
                 {/* Header with Timer */}
-                <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-md)' }}>
-                    <h2 style={{ fontSize: 'var(--font-size-lg)', marginBottom: 'var(--spacing-sm)' }}>
-                        Round {gameState?.round} • Duel
-                    </h2>
+                <div style={{
+                    textAlign: 'center',
+                    marginBottom: 'var(--space-xl)'
+                }}>
+                    <SystemMessage>ROUND {gameState?.round}</SystemMessage>
                     {gameState?.phaseEndsAt && <Timer endsAt={gameState.phaseEndsAt} />}
                 </div>
 
-                {/* Opponent Info */}
-                <div className="card" style={{ textAlign: 'center' }}>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--spacing-xs)' }}>
-                        Dueling against
-                    </p>
-                    <h3 style={{ fontSize: 'var(--font-size-xl)' }}>
-                        {currentDuel.opponent.name}
-                    </h3>
-                    <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--spacing-xs)' }}>
-                        {currentDuel.opponent.numberCardCount} cards
+                {/* Opponent */}
+                <div style={{
+                    textAlign: 'center',
+                    marginBottom: 'var(--space-xl)',
+                    padding: 'var(--space-lg)',
+                    border: '1px solid var(--border-muted)'
+                }}>
+                    <SystemMessage>OPPONENT</SystemMessage>
+                    <DisplayTitle size="2xl">{currentDuel.opponent.name}</DisplayTitle>
+                    <p className="text-system mt-sm" style={{ color: 'var(--text-muted)' }}>
+                        {currentDuel.opponent.numberCardCount} CARDS REMAINING
                     </p>
                 </div>
 
                 {/* Your Role */}
-                <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-md)' }}>
+                <div style={{ textAlign: 'center', marginBottom: 'var(--space-lg)' }}>
                     <RoleBadge role={privateState.role} />
                 </div>
 
-                {/* Action Status */}
+                {/* Action Area */}
                 {hasSubmittedAction ? (
-                    <div className="card" style={{ textAlign: 'center', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(34, 197, 94, 0.2))' }}>
-                        <p style={{ fontSize: 'var(--font-size-lg)', marginBottom: 'var(--spacing-sm)' }}>
-                            ✓ Action Submitted
-                        </p>
-                        <p style={{ color: 'var(--text-secondary)' }}>
-                            Waiting for opponent...
-                        </p>
+                    <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center'
+                    }}>
+                        <DisplayTitle size="xl">ACTION LOCKED</DisplayTitle>
+                        <SystemMessage>AWAITING OPPONENT</SystemMessage>
+                        <div style={{ marginTop: 'var(--space-lg)' }}>
+                            <Spinner />
+                        </div>
                     </div>
                 ) : (
                     <>
                         {/* Special Cards */}
-                        <div style={{ marginBottom: 'var(--spacing-md)' }}>
-                            <p style={{
-                                color: 'var(--text-secondary)',
-                                marginBottom: 'var(--spacing-sm)',
-                                fontSize: 'var(--font-size-sm)'
-                            }}>
-                                Special Actions
+                        <div style={{ marginBottom: 'var(--space-lg)' }}>
+                            <p className="text-system mb-sm" style={{ fontSize: 'var(--font-size-xs)' }}>
+                                SPECIAL ACTIONS
                             </p>
-                            <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'center' }}>
+                            <div style={{
+                                display: 'flex',
+                                gap: 'var(--space-sm)',
+                                justifyContent: 'center'
+                            }}>
                                 {privateState.zombieCard && (
                                     <SpecialCardComponent
                                         type="zombie"
@@ -163,33 +173,21 @@ export function DuelScreen() {
                                     />
                                 )}
                                 {!privateState.zombieCard && !privateState.vaccineCard && !privateState.hasShotgun && (
-                                    <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                        No special cards
-                                    </p>
+                                    <span className="text-muted">NO SPECIAL CARDS</span>
                                 )}
                             </div>
                         </div>
 
                         {/* Number Cards */}
-                        <div className="card">
+                        <div className="card" style={{ flex: 1 }}>
                             <div className="card-header">
-                                <span>Your Cards</span>
-                                <span
-                                    style={{
-                                        color: selectedAction === 'number' ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                                        fontSize: 'var(--font-size-sm)'
-                                    }}
-                                >
-                                    {selectedAction === 'number' ? 'Select a card' : 'Tap to select'}
-                                </span>
+                                <span>YOUR HAND</span>
+                                <span>{privateState.numberCards.length}</span>
                             </div>
                             <div className="card-hand">
                                 {privateState.numberCards
                                     .sort((a, b) => {
-                                        // Sort by suit then value
-                                        if (a.suit !== b.suit) {
-                                            return a.suit.localeCompare(b.suit);
-                                        }
+                                        if (a.suit !== b.suit) return a.suit.localeCompare(b.suit);
                                         return a.value - b.value;
                                     })
                                     .map(card => (
@@ -212,76 +210,79 @@ export function DuelScreen() {
                         </div>
 
                         {/* Confirm Button */}
-                        <button
-                            className="btn btn-primary"
-                            disabled={!canConfirm}
-                            onClick={handleConfirm}
-                            style={{ marginTop: 'var(--spacing-md)' }}
-                        >
-                            {selectedAction === 'shotgun' ? '🔫 Use Shotgun' :
-                                selectedAction === 'vaccine' ? '💉 Use Vaccine' :
-                                    selectedAction === 'zombie' ? '🧟 Play Zombie Card' :
-                                        selectedCardId ? 'Confirm Play' : 'Select an Action'}
-                        </button>
+                        <div style={{ marginTop: 'var(--space-lg)' }}>
+                            <SystemMessage>YOUR ACTION IS FINAL</SystemMessage>
+                            <button
+                                className="btn btn-primary btn-block mt-md"
+                                disabled={!canConfirm}
+                                onClick={handleConfirm}
+                            >
+                                {selectedAction === 'shotgun' ? 'FIRE SHOTGUN' :
+                                    selectedAction === 'vaccine' ? 'ADMINISTER CURE' :
+                                        selectedAction === 'zombie' ? 'INFECT TARGET' :
+                                            selectedCardId ? 'CONFIRM PLAY' : 'SELECT ACTION'}
+                            </button>
+                        </div>
                     </>
                 )}
 
                 {/* Result Modal */}
                 {showResult && duelResult && (
-                    <Modal title="Duel Result" onClose={() => setShowResult(false)}>
-                        <div className="duel-result">
-                            <div className={`outcome ${duelResult.outcome}`}>
-                                {duelResult.outcome === 'win' ? '🏆 Victory!' :
-                                    duelResult.outcome === 'lose' ? '💀 Defeat' : '🤝 Draw'}
+                    <Modal title="DUEL RESULT" onClose={() => setShowResult(false)}>
+                        <div style={{ textAlign: 'center' }}>
+                            <DisplayTitle size="2xl">
+                                {duelResult.outcome === 'win' ? 'VICTORY' :
+                                    duelResult.outcome === 'lose' ? 'DEFEAT' : 'DRAW'}
+                            </DisplayTitle>
+
+                            <div style={{
+                                marginTop: 'var(--space-lg)',
+                                textAlign: 'left'
+                            }}>
+                                {duelResult.infected && (
+                                    <p className="text-system text-red mb-sm">
+                                        ► YOU HAVE BEEN INFECTED
+                                    </p>
+                                )}
+
+                                {duelResult.cured && (
+                                    <p className="text-system mb-sm">
+                                        ► YOU HAVE BEEN CURED
+                                    </p>
+                                )}
+
+                                {duelResult.shotgunUsed && (
+                                    <p className={`text-system mb-sm ${duelResult.shotgunResult === 'killed_zombie' ? '' : 'text-red'}`}>
+                                        {duelResult.shotgunResult === 'killed_zombie'
+                                            ? '► TARGET ELIMINATED'
+                                            : '► SHOT MISSED — TARGET WAS HUMAN'}
+                                    </p>
+                                )}
+
+                                {duelResult.cardStolen && (
+                                    <p className="text-system mb-sm">
+                                        ► CARD ACQUIRED FROM OPPONENT
+                                    </p>
+                                )}
+
+                                {duelResult.cardLost && (
+                                    <p className="text-system text-red mb-sm">
+                                        ► CARD LOST TO OPPONENT
+                                    </p>
+                                )}
+
+                                {duelResult.opponentEliminated && (
+                                    <p className="text-system mb-sm">
+                                        ► OPPONENT ELIMINATED
+                                    </p>
+                                )}
                             </div>
 
-                            {duelResult.infected && (
-                                <p style={{ color: 'var(--zombie-green)', marginBottom: 'var(--spacing-sm)' }}>
-                                    🦠 You were infected! You are now a zombie.
-                                </p>
-                            )}
-
-                            {duelResult.cured && (
-                                <p style={{ color: 'var(--accent-purple)', marginBottom: 'var(--spacing-sm)' }}>
-                                    💊 You were cured! You are now human.
-                                </p>
-                            )}
-
-                            {duelResult.shotgunUsed && (
-                                <p style={{
-                                    color: duelResult.shotgunResult === 'killed_zombie' ? 'var(--success)' : 'var(--warning)',
-                                    marginBottom: 'var(--spacing-sm)'
-                                }}>
-                                    {duelResult.shotgunResult === 'killed_zombie'
-                                        ? '🔫 You killed a zombie!'
-                                        : '🔫 Your shot missed... opponent was human.'}
-                                </p>
-                            )}
-
-                            {duelResult.cardStolen && (
-                                <p style={{ color: 'var(--accent-green)', marginBottom: 'var(--spacing-sm)' }}>
-                                    📥 You stole a card from your opponent!
-                                </p>
-                            )}
-
-                            {duelResult.cardLost && (
-                                <p style={{ color: 'var(--accent-red)', marginBottom: 'var(--spacing-sm)' }}>
-                                    📤 You lost a card to your opponent.
-                                </p>
-                            )}
-
-                            {duelResult.opponentEliminated && (
-                                <p style={{ color: 'var(--success)', marginBottom: 'var(--spacing-sm)' }}>
-                                    ☠️ Your opponent was eliminated!
-                                </p>
-                            )}
-
                             <button
-                                className="btn btn-primary"
+                                className="btn btn-secondary btn-block mt-lg"
                                 onClick={() => setShowResult(false)}
-                                style={{ marginTop: 'var(--spacing-md)' }}
                             >
-                                Continue
+                                CONTINUE
                             </button>
                         </div>
                     </Modal>

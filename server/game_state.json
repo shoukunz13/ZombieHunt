@@ -1,14 +1,14 @@
 {
-  "gameCode": "ZOMBIE",
+  "gameCode": "HUNT",
   "phase": "waiting",
   "round": 0,
   "players": [
     [
-      "34ccfa0a-5aa5-4e5b-8019-531f54d2bec9",
+      "113f0c7d-59d6-4f9a-9d1e-313feb28955a",
       {
-        "id": "34ccfa0a-5aa5-4e5b-8019-531f54d2bec9",
-        "name": "hadi",
-        "socketId": "uWNlHYlc_DrjWb9iAAAF",
+        "id": "113f0c7d-59d6-4f9a-9d1e-313feb28955a",
+        "name": "AKMAL",
+        "socketId": "9Jc2AAO-2yYVHxDHAAAL",
         "teamId": 0,
         "role": "human",
         "status": "alive",
@@ -25,5 +25,5 @@
   "duels": [],
   "currentRoundDuels": [],
   "events": [],
-  "createdAt": 1768012598155
+  "createdAt": 1768014850664
 }

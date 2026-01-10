@@ -22,8 +22,10 @@ interface HostContextType {
     hostState: HostState | null;
     events: PublicEvent[];
     authError: string | null;
+    currentGameCode: string | null;
 
     authenticate: (pin: string) => void;
+    createGame: (gameCode: string) => void;
     startGame: () => void;
     forcePhase: (phase: string) => void;
     kickPlayer: (playerId: string) => void;
@@ -38,6 +40,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
     const [hostState, setHostState] = useState<HostState | null>(null);
     const [events, setEvents] = useState<PublicEvent[]>([]);
     const [authError, setAuthError] = useState<string | null>(null);
+    const [currentGameCode, setCurrentGameCode] = useState<string | null>(null);
 
     useEffect(() => {
         const newSocket = io(getServerUrl(), {
@@ -70,6 +73,15 @@ export function HostProvider({ children }: { children: ReactNode }) {
         newSocket.on('host_state_update', (data) => {
             setHostState(data.fullState);
             setEvents(data.publicEvents || []);
+            if (data.fullState?.gameCode) {
+                setCurrentGameCode(data.fullState.gameCode);
+            }
+        });
+
+        newSocket.on('host_game_created', (data) => {
+            console.log('Game created:', data.gameCode);
+            setCurrentGameCode(data.gameCode);
+            setHostState(data.hostState);
         });
 
         newSocket.on('error', (data: { message: string }) => {
@@ -88,6 +100,12 @@ export function HostProvider({ children }: { children: ReactNode }) {
             socket.emit('host_auth', { pin });
         }
     }, [socket]);
+
+    const createGame = useCallback((gameCode: string) => {
+        if (socket && isAuthenticated) {
+            socket.emit('host_create_game', { gameCode });
+        }
+    }, [socket, isAuthenticated]);
 
     const startGame = useCallback(() => {
         if (socket && isAuthenticated) {
@@ -114,7 +132,9 @@ export function HostProvider({ children }: { children: ReactNode }) {
         hostState,
         events,
         authError,
+        currentGameCode,
         authenticate,
+        createGame,
         startGame,
         forcePhase,
         kickPlayer,

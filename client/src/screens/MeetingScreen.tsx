@@ -1,6 +1,10 @@
 /**
- * Zombie Hunt - Meeting Screen
- * Players return to the meeting area and see round events.
+ * ZOMBIE HUNT — Meeting Screen
+ * 
+ * Design: Black background, stark messages
+ * - Center text for return instruction
+ * - Anonymous event feed
+ * - No counts or team info
  */
 
 import { useEffect } from 'react';
@@ -8,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import {
     Timer, RoleBadge, SpecialIcons, EventItem,
-    PlayingCardComponent
+    PlayingCardComponent, DisplayTitle, SystemMessage
 } from '../components/shared';
 
 export function MeetingScreen() {
@@ -42,8 +46,8 @@ export function MeetingScreen() {
     if (!privateState || !gameState) {
         return (
             <div className="container">
-                <div className="screen" style={{ alignItems: 'center', justifyContent: 'center' }}>
-                    <div className="spinner"></div>
+                <div className="screen screen-centered">
+                    <div className="spinner" />
                 </div>
             </div>
         );
@@ -53,35 +57,46 @@ export function MeetingScreen() {
         <div className="container">
             <div className="screen">
                 {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-lg)' }}>
-                    <h2 style={{ fontSize: 'var(--font-size-xl)', marginBottom: 'var(--spacing-sm)' }}>
-                        📍 Meeting Phase
-                    </h2>
-                    <p style={{ color: 'var(--text-secondary)' }}>
-                        Return to the meeting area
-                    </p>
-                    {gameState.phaseEndsAt && <Timer endsAt={gameState.phaseEndsAt} />}
+                <div style={{
+                    textAlign: 'center',
+                    marginBottom: 'var(--space-2xl)',
+                    paddingTop: 'var(--space-xl)'
+                }}>
+                    <DisplayTitle size="2xl">RETURN TO</DisplayTitle>
+                    <DisplayTitle size="3xl">MEETING AREA</DisplayTitle>
+                    {gameState.phaseEndsAt && (
+                        <div style={{ marginTop: 'var(--space-lg)' }}>
+                            <Timer endsAt={gameState.phaseEndsAt} />
+                        </div>
+                    )}
                 </div>
 
-                {/* Round Info */}
-                <div className="card" style={{ textAlign: 'center', marginBottom: 'var(--spacing-md)' }}>
-                    <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'bold' }}>
-                        Round {gameState.round} / 20
+                {/* Round Number */}
+                <div style={{
+                    textAlign: 'center',
+                    padding: 'var(--space-lg)',
+                    border: '1px solid var(--border-muted)',
+                    marginBottom: 'var(--space-xl)'
+                }}>
+                    <SystemMessage>ROUND COMPLETE</SystemMessage>
+                    <p className="heading-display" style={{ fontSize: 'var(--font-size-massive)' }}>
+                        {gameState.round}
                     </p>
+                    <SystemMessage>OF 20</SystemMessage>
                 </div>
 
-                {/* Your Status */}
-                <div className="info-panel">
+                {/* Your Status - Minimal */}
+                <div className="info-panel" style={{ marginBottom: 'var(--space-lg)' }}>
                     <div className="info-row">
-                        <span className="info-label">Your Role</span>
+                        <span className="info-label">STATUS</span>
                         <RoleBadge role={privateState.role} />
                     </div>
                     <div className="info-row">
-                        <span className="info-label">Cards Remaining</span>
+                        <span className="info-label">CARDS</span>
                         <span className="info-value">{privateState.numberCards.length}</span>
                     </div>
                     <div className="info-row">
-                        <span className="info-label">Special Items</span>
+                        <span className="info-label">SPECIAL</span>
                         <SpecialIcons
                             hasZombie={!!privateState.zombieCard}
                             hasVaccine={!!privateState.vaccineCard}
@@ -90,15 +105,18 @@ export function MeetingScreen() {
                     </div>
                 </div>
 
-                {/* Round Events */}
-                <div className="card">
+                {/* Event Feed - Anonymous */}
+                <div className="card" style={{ flex: 1 }}>
                     <div className="card-header">
-                        <span>📢 Round Events</span>
+                        <span>INCIDENT REPORT</span>
                     </div>
                     {roundEvents.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 'var(--spacing-md)' }}>
-                            No notable events this round
-                        </p>
+                        <div style={{
+                            textAlign: 'center',
+                            padding: 'var(--space-xl)'
+                        }}>
+                            <SystemMessage>NO INCIDENTS REPORTED</SystemMessage>
+                        </div>
                     ) : (
                         <div className="event-feed">
                             {roundEvents.map(event => (
@@ -112,37 +130,44 @@ export function MeetingScreen() {
                     )}
                 </div>
 
-                {/* Your Cards Preview */}
-                <div className="card" style={{ marginTop: 'auto' }}>
-                    <div className="card-header">
-                        <span>Your Hand</span>
+                {/* Cards Preview - Collapsed */}
+                <details style={{ marginTop: 'var(--space-lg)' }}>
+                    <summary className="text-system" style={{
+                        cursor: 'pointer',
+                        padding: 'var(--space-md)',
+                        border: '1px solid var(--border-muted)',
+                        background: 'var(--bg-secondary)'
+                    }}>
+                        VIEW YOUR HAND ({privateState.numberCards.length})
+                    </summary>
+                    <div className="card" style={{ borderTop: 'none' }}>
+                        <div className="card-hand">
+                            {privateState.numberCards
+                                .sort((a, b) => {
+                                    if (a.suit !== b.suit) return a.suit.localeCompare(b.suit);
+                                    return a.value - b.value;
+                                })
+                                .map(card => (
+                                    <PlayingCardComponent
+                                        key={card.id}
+                                        card={card}
+                                        disabled
+                                    />
+                                ))}
+                        </div>
                     </div>
-                    <div className="card-hand">
-                        {privateState.numberCards
-                            .sort((a, b) => {
-                                if (a.suit !== b.suit) return a.suit.localeCompare(b.suit);
-                                return a.value - b.value;
-                            })
-                            .map(card => (
-                                <PlayingCardComponent
-                                    key={card.id}
-                                    card={card}
-                                    disabled
-                                />
-                            ))}
-                    </div>
-                </div>
+                </details>
 
-                {/* Next Round Hint */}
+                {/* Footer */}
                 <div style={{
-                    textAlign: 'center',
-                    marginTop: 'var(--spacing-md)',
-                    color: 'var(--text-secondary)',
-                    fontSize: 'var(--font-size-sm)'
+                    marginTop: 'var(--space-xl)',
+                    textAlign: 'center'
                 }}>
-                    {gameState.round < 20
-                        ? 'Next round starting soon...'
-                        : 'Final round complete! Results incoming...'}
+                    <SystemMessage>
+                        {gameState.round < 20
+                            ? 'NEXT ROUND IMMINENT'
+                            : 'FINAL RESULTS INCOMING'}
+                    </SystemMessage>
                 </div>
             </div>
         </div>

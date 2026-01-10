@@ -1,12 +1,16 @@
 /**
- * Zombie Hunt - Eliminated Screen
- * Shown to players who have been eliminated.
+ * ZOMBIE HUNT — Eliminated Screen
+ * 
+ * Design: Stark, final
+ * - Large GAME OVER message
+ * - Small text about removal
+ * - Spectator mode only
  */
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { EventItem } from '../components/shared';
+import { EventItem, DisplayTitle } from '../components/shared';
 
 export function EliminatedScreen() {
     const navigate = useNavigate();
@@ -31,47 +35,55 @@ export function EliminatedScreen() {
 
     return (
         <div className="container">
-            <div className="screen">
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-xl)' }}>
-                    <div style={{ fontSize: '64px', marginBottom: 'var(--spacing-md)' }}>
-                        💀
-                    </div>
-                    <h1 style={{
-                        fontSize: 'var(--font-size-2xl)',
-                        color: 'var(--accent-red)',
-                        marginBottom: 'var(--spacing-sm)'
+            <div className="screen screen-centered">
+                {/* Stark elimination message */}
+                <div style={{ marginBottom: 'var(--space-3xl)' }}>
+                    <DisplayTitle size="massive">GAME</DisplayTitle>
+                    <DisplayTitle size="massive">OVER</DisplayTitle>
+                </div>
+
+                <div style={{
+                    marginBottom: 'var(--space-2xl)',
+                    maxWidth: '280px',
+                    textAlign: 'center'
+                }}>
+                    <p className="text-system" style={{
+                        marginBottom: 'var(--space-md)',
+                        color: 'var(--accent-red)'
                     }}>
-                        ELIMINATED
-                    </h1>
-                    <p style={{ color: 'var(--text-secondary)' }}>
-                        {eliminationReason || 'You have been removed from the game'}
+                        YOU ARE NO LONGER A PLAYER
                     </p>
+                    {eliminationReason && (
+                        <p className="text-system" style={{ color: 'var(--text-muted)' }}>
+                            {eliminationReason}
+                        </p>
+                    )}
                 </div>
 
                 {/* Spectator Info */}
-                <div className="card">
+                <div className="card" style={{ width: '100%', maxWidth: '320px' }}>
                     <div className="card-header">
-                        <span>🎥 Spectator Mode</span>
+                        <span>SPECTATOR MODE</span>
                     </div>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--spacing-md)' }}>
-                        You can continue watching the game unfold.
-                    </p>
 
                     {gameState && (
-                        <div className="info-panel" style={{ background: 'var(--bg-tertiary)', marginBottom: 0 }}>
+                        <div className="info-panel" style={{
+                            background: 'transparent',
+                            border: 'none',
+                            padding: 0
+                        }}>
                             <div className="info-row">
-                                <span className="info-label">Phase</span>
-                                <span className="info-value" style={{ textTransform: 'capitalize' }}>
+                                <span className="info-label">PHASE</span>
+                                <span className="info-value" style={{ textTransform: 'uppercase' }}>
                                     {gameState.phase}
                                 </span>
                             </div>
                             <div className="info-row">
-                                <span className="info-label">Round</span>
+                                <span className="info-label">ROUND</span>
                                 <span className="info-value">{gameState.round} / 20</span>
                             </div>
                             <div className="info-row">
-                                <span className="info-label">Players Alive</span>
+                                <span className="info-label">REMAINING</span>
                                 <span className="info-value">{gameState.alivePlayerCount}</span>
                             </div>
                         </div>
@@ -79,16 +91,16 @@ export function EliminatedScreen() {
                 </div>
 
                 {/* Event Feed */}
-                <div className="card" style={{ marginTop: 'auto' }}>
-                    <div className="card-header">
-                        <span>📢 Recent Events</span>
-                    </div>
-                    {roundEvents.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 'var(--spacing-md)' }}>
-                            Waiting for events...
-                        </p>
-                    ) : (
-                        <div className="event-feed" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {roundEvents.length > 0 && (
+                    <div className="card" style={{
+                        width: '100%',
+                        maxWidth: '320px',
+                        marginTop: 'var(--space-lg)'
+                    }}>
+                        <div className="card-header">
+                            <span>RECENT ACTIVITY</span>
+                        </div>
+                        <div className="event-feed" style={{ maxHeight: '120px', overflowY: 'auto' }}>
                             {roundEvents.map(event => (
                                 <EventItem
                                     key={event.id}
@@ -97,8 +109,8 @@ export function EliminatedScreen() {
                                 />
                             ))}
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
         </div>
     );

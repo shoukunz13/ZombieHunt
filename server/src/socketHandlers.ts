@@ -10,7 +10,7 @@ import {
     allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
     startNextRound, getPlayer, getPlayerPublic, getPlayerPrivate,
     getGameStatePublic, getHostState, getFinalReveal, getAlivePlayers,
-    getCurrentRoundEvents
+    getCurrentRoundEvents, resetGame
 } from './gameState';
 import {
     submitDuelAction, resolveDuel, isDuelReady, getDuelResultPrivate,
@@ -76,6 +76,10 @@ export function initializeSocketHandlers(io: Server): void {
 
         socket.on('host_kick_player', ({ playerId }: { playerId: string }) => {
             handleHostKickPlayer(io, socket, playerId);
+        });
+
+        socket.on('host_create_game', ({ gameCode }: { gameCode: string }) => {
+            handleHostCreateGame(io, socket, gameCode);
         });
 
         // ============ Disconnect ============
@@ -211,6 +215,29 @@ function handleHostAuth(io: Server, socket: Socket, pin: string): void {
     const game = getGame();
     socket.emit('host_authed', {
         hostState: game ? getHostState(game) : null,
+    });
+}
+
+function handleHostCreateGame(io: Server, socket: Socket, gameCode: string): void {
+    if (socket.id !== hostSocketId) return;
+
+    // Validate game code
+    if (!gameCode || gameCode.trim().length < 2) {
+        socket.emit('error', { message: 'Game code must be at least 2 characters' });
+        return;
+    }
+
+    const sanitizedCode = gameCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    // Create new game
+    const game = resetGame(sanitizedCode);
+
+    console.log(`Host created new game: ${sanitizedCode}`);
+
+    // Notify host of new game state
+    socket.emit('host_game_created', {
+        gameCode: sanitizedCode,
+        hostState: getHostState(game),
     });
 }
 

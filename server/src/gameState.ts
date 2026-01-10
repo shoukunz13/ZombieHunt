@@ -39,6 +39,15 @@ export function createGame(gameCode: string): GameState {
 }
 
 /**
+ * Reset and create a new game (for host)
+ */
+export function resetGame(gameCode: string): GameState {
+    // Clear any existing game
+    currentGame = null;
+    return createGame(gameCode);
+}
+
+/**
  * Get current game or create one
  */
 export function getOrCreateGame(gameCode: string): GameState {
