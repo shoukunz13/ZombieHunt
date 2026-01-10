@@ -63,7 +63,7 @@ interface GameContextType {
     joinGame: (gameCode: string, name: string) => void;
     selectOpponent: (opponentId: string) => void;
     cancelSelection: () => void;
-    submitAction: (actionType: string, cardId?: string) => void;
+    submitAction: (actionType: string, cardId?: string, cardIds?: string[]) => void;
     acknowledgeRound: () => void;
     clearError: () => void;
 }
@@ -234,12 +234,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
     }, [socket]);
 
-    const submitAction = useCallback((actionType: string, cardId?: string) => {
+    const submitAction = useCallback((actionType: string, cardId?: string, cardIds?: string[]) => {
         if (socket && currentDuel) {
             socket.emit('duel_submit_action', {
                 duelId: currentDuel.duelId,
                 actionType,
                 cardId,
+                cardIds,
             });
         }
     }, [socket, currentDuel]);

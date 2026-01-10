@@ -4,18 +4,18 @@
  * Design: High stakes confrontation
  * - Fullscreen countdown at top
  * - Opponent name centered
- * - Card grid with red highlights
- * - Desaturated screen when locked
+ * - Multi-card selection (up to 5 cards, same suit)
+ * - DRAMATIC full-screen results for major events
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import {
     Timer, PlayingCardComponent, SpecialCardComponent,
-    RoleBadge, Modal, DisplayTitle, SystemMessage, Spinner
+    RoleBadge, DisplayTitle, SystemMessage, Spinner
 } from '../components/shared';
-import { ActionType } from '../types';
+import { ActionType, NumberCard } from '../types';
 
 export function DuelScreen() {
     const navigate = useNavigate();
@@ -25,7 +25,7 @@ export function DuelScreen() {
     } = useGame();
 
     const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
-    const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+    const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
     const [showResult, setShowResult] = useState(false);
 
     // Handle phase changes
@@ -57,6 +57,22 @@ export function DuelScreen() {
         }
     }, [duelResult]);
 
+    // Calculate selected cards sum and suit
+    const selectedCardsInfo = useMemo(() => {
+        if (!privateState || selectedCardIds.length === 0) {
+            return { sum: 0, suit: null, cards: [] };
+        }
+
+        const cards = selectedCardIds
+            .map(id => privateState.numberCards.find(c => c.id === id))
+            .filter((c): c is NumberCard => c !== undefined);
+
+        const sum = cards.reduce((acc, c) => acc + c.value, 0);
+        const suit = cards.length > 0 ? cards[0].suit : null;
+
+        return { sum, suit, cards };
+    }, [privateState, selectedCardIds]);
+
     if (!privateState || !currentDuel) {
         return (
             <div className="container">
@@ -68,20 +84,107 @@ export function DuelScreen() {
         );
     }
 
+    const handleCardClick = (card: NumberCard) => {
+        if (selectedCardIds.includes(card.id)) {
+            // Deselect
+            setSelectedCardIds(prev => prev.filter(id => id !== card.id));
+            if (selectedCardIds.length === 1) {
+                setSelectedAction(null);
+            }
+        } else {
+            // Select - check constraints
+            if (selectedCardIds.length >= 5) {
+                return; // Max 5 cards
+            }
+
+            // Must be same suit if other cards selected
+            if (selectedCardsInfo.suit && card.suit !== selectedCardsInfo.suit) {
+                return; // Different suit
+            }
+
+            setSelectedCardIds(prev => [...prev, card.id]);
+            setSelectedAction('number');
+        }
+    };
+
     const handleConfirm = () => {
         if (!selectedAction) return;
 
-        if (selectedAction === 'number' && selectedCardId) {
-            submitAction('number', selectedCardId);
+        if (selectedAction === 'number' && selectedCardIds.length > 0) {
+            submitAction('number', selectedCardIds[0], selectedCardIds);
         } else if (selectedAction !== 'number') {
             submitAction(selectedAction);
         }
 
         setSelectedAction(null);
-        setSelectedCardId(null);
+        setSelectedCardIds([]);
     };
 
-    const canConfirm = selectedAction && (selectedAction !== 'number' || selectedCardId);
+    const handleSpecialAction = (action: ActionType) => {
+        if (selectedAction === action) {
+            setSelectedAction(null);
+        } else {
+            setSelectedAction(action);
+            setSelectedCardIds([]); // Clear card selection when selecting special
+        }
+    };
+
+    const handleCloseResult = () => {
+        setShowResult(false);
+    };
+
+    const canConfirm = selectedAction && (selectedAction !== 'number' || selectedCardIds.length > 0);
+
+    // Check if a card can be selected (must be same suit as already selected)
+    const canSelectCard = (card: NumberCard): boolean => {
+        if (selectedCardIds.length >= 5) return false;
+        if (selectedCardIds.length === 0) return true;
+        return card.suit === selectedCardsInfo.suit;
+    };
+
+    // Determine result overlay type
+    const getResultOverlayClass = () => {
+        if (!duelResult) return '';
+        if (duelResult.infected) return 'infected';
+        if (duelResult.youEliminated) return 'eliminated';
+        if (duelResult.cured) return 'cured';
+        if (duelResult.shotgunUsed && duelResult.shotgunResult === 'killed_zombie') return 'shotgun-kill victory';
+        if (duelResult.outcome === 'win') return 'victory';
+        if (duelResult.outcome === 'lose') return 'defeat';
+        return '';
+    };
+
+    const getResultIcon = () => {
+        if (!duelResult) return '';
+        if (duelResult.infected) return '☠';
+        if (duelResult.youEliminated) return '✕';
+        if (duelResult.cured) return '✚';
+        if (duelResult.shotgunUsed && duelResult.shotgunResult === 'killed_zombie') return '×';
+        if (duelResult.outcome === 'win') return '▲';
+        if (duelResult.outcome === 'lose') return '▼';
+        return '●';
+    };
+
+    const getResultTitle = () => {
+        if (!duelResult) return '';
+        if (duelResult.infected) return 'INFECTED';
+        if (duelResult.youEliminated) return 'ELIMINATED';
+        if (duelResult.cured) return 'CURED';
+        if (duelResult.shotgunUsed && duelResult.shotgunResult === 'killed_zombie') return 'TARGET DOWN';
+        if (duelResult.outcome === 'win') return 'VICTORY';
+        if (duelResult.outcome === 'lose') return 'DEFEAT';
+        return 'DRAW';
+    };
+
+    const getResultSubtitle = () => {
+        if (!duelResult) return '';
+        if (duelResult.infected) return 'YOU HAVE BECOME ONE OF THEM';
+        if (duelResult.youEliminated) return 'YOUR GAME IS OVER';
+        if (duelResult.cured) return 'THE INFECTION HAS BEEN PURGED';
+        if (duelResult.shotgunUsed && duelResult.shotgunResult === 'killed_zombie') return 'THREAT NEUTRALIZED';
+        if (duelResult.shotgunUsed && duelResult.shotgunResult === 'wasted_on_human') return 'WRONG TARGET — WASTED SHOT';
+        return '';
+    };
 
     return (
         <div className={`container ${hasSubmittedAction ? 'desaturated' : ''}`}>
@@ -146,30 +249,21 @@ export function DuelScreen() {
                                     <SpecialCardComponent
                                         type="zombie"
                                         selected={selectedAction === 'zombie'}
-                                        onClick={() => {
-                                            setSelectedAction(selectedAction === 'zombie' ? null : 'zombie');
-                                            setSelectedCardId(null);
-                                        }}
+                                        onClick={() => handleSpecialAction('zombie')}
                                     />
                                 )}
                                 {privateState.vaccineCard && (
                                     <SpecialCardComponent
                                         type="vaccine"
                                         selected={selectedAction === 'vaccine'}
-                                        onClick={() => {
-                                            setSelectedAction(selectedAction === 'vaccine' ? null : 'vaccine');
-                                            setSelectedCardId(null);
-                                        }}
+                                        onClick={() => handleSpecialAction('vaccine')}
                                     />
                                 )}
                                 {privateState.hasShotgun && (
                                     <SpecialCardComponent
                                         type="shotgun"
                                         selected={selectedAction === 'shotgun'}
-                                        onClick={() => {
-                                            setSelectedAction(selectedAction === 'shotgun' ? null : 'shotgun');
-                                            setSelectedCardId(null);
-                                        }}
+                                        onClick={() => handleSpecialAction('shotgun')}
                                     />
                                 )}
                                 {!privateState.zombieCard && !privateState.vaccineCard && !privateState.hasShotgun && (
@@ -182,8 +276,22 @@ export function DuelScreen() {
                         <div className="card" style={{ flex: 1 }}>
                             <div className="card-header">
                                 <span>YOUR HAND</span>
-                                <span>{privateState.numberCards.length}</span>
+                                <span>
+                                    {selectedCardIds.length > 0 ? (
+                                        <span style={{ color: 'var(--accent-red)' }}>
+                                            {selectedCardIds.length} SELECTED = {selectedCardsInfo.sum}
+                                        </span>
+                                    ) : (
+                                        privateState.numberCards.length
+                                    )}
+                                </span>
                             </div>
+                            <p className="text-system mb-sm" style={{
+                                fontSize: 'var(--font-size-xs)',
+                                color: 'var(--text-muted)'
+                            }}>
+                                SELECT UP TO 5 CARDS — SAME SUIT ONLY
+                            </p>
                             <div className="card-hand">
                                 {privateState.numberCards
                                     .sort((a, b) => {
@@ -194,16 +302,9 @@ export function DuelScreen() {
                                         <PlayingCardComponent
                                             key={card.id}
                                             card={card}
-                                            selected={selectedCardId === card.id}
-                                            onClick={() => {
-                                                if (selectedCardId === card.id) {
-                                                    setSelectedCardId(null);
-                                                    setSelectedAction(null);
-                                                } else {
-                                                    setSelectedCardId(card.id);
-                                                    setSelectedAction('number');
-                                                }
-                                            }}
+                                            selected={selectedCardIds.includes(card.id)}
+                                            disabled={!canSelectCard(card) && !selectedCardIds.includes(card.id)}
+                                            onClick={() => handleCardClick(card)}
                                         />
                                     ))}
                             </div>
@@ -220,72 +321,82 @@ export function DuelScreen() {
                                 {selectedAction === 'shotgun' ? 'FIRE SHOTGUN' :
                                     selectedAction === 'vaccine' ? 'ADMINISTER CURE' :
                                         selectedAction === 'zombie' ? 'INFECT TARGET' :
-                                            selectedCardId ? 'CONFIRM PLAY' : 'SELECT ACTION'}
+                                            selectedCardIds.length > 0 ? `PLAY ${selectedCardIds.length} CARD${selectedCardIds.length > 1 ? 'S' : ''} (${selectedCardsInfo.sum})` : 'SELECT ACTION'}
                             </button>
                         </div>
                     </>
                 )}
 
-                {/* Result Modal */}
+                {/* DRAMATIC RESULT OVERLAY */}
                 {showResult && duelResult && (
-                    <Modal title="DUEL RESULT" onClose={() => setShowResult(false)}>
-                        <div style={{ textAlign: 'center' }}>
-                            <DisplayTitle size="2xl">
-                                {duelResult.outcome === 'win' ? 'VICTORY' :
-                                    duelResult.outcome === 'lose' ? 'DEFEAT' : 'DRAW'}
-                            </DisplayTitle>
+                    <div className={`result-overlay ${getResultOverlayClass()}`} onClick={handleCloseResult}>
+                        <div className="result-content">
+                            {/* Large Icon */}
+                            <div className="result-icon">
+                                {getResultIcon()}
+                            </div>
 
-                            <div style={{
-                                marginTop: 'var(--space-lg)',
-                                textAlign: 'left'
-                            }}>
-                                {duelResult.infected && (
-                                    <p className="text-system text-red mb-sm">
-                                        ► YOU HAVE BEEN INFECTED
-                                    </p>
-                                )}
+                            {/* Title with glitch effect for dramatic results */}
+                            <h1
+                                className={`result-title ${duelResult.infected || duelResult.youEliminated ? 'glitch-text' : ''}`}
+                                data-text={getResultTitle()}
+                            >
+                                {getResultTitle()}
+                            </h1>
 
-                                {duelResult.cured && (
-                                    <p className="text-system mb-sm">
-                                        ► YOU HAVE BEEN CURED
-                                    </p>
-                                )}
+                            {/* Subtitle */}
+                            {getResultSubtitle() && (
+                                <p className="result-subtitle">
+                                    {getResultSubtitle()}
+                                </p>
+                            )}
 
-                                {duelResult.shotgunUsed && (
-                                    <p className={`text-system mb-sm ${duelResult.shotgunResult === 'killed_zombie' ? '' : 'text-red'}`}>
-                                        {duelResult.shotgunResult === 'killed_zombie'
-                                            ? '► TARGET ELIMINATED'
-                                            : '► SHOT MISSED — TARGET WAS HUMAN'}
-                                    </p>
-                                )}
-
+                            {/* Additional Details */}
+                            <div className="result-details">
                                 {duelResult.cardStolen && (
-                                    <p className="text-system mb-sm">
+                                    <p className="result-detail-item success">
                                         ► CARD ACQUIRED FROM OPPONENT
                                     </p>
                                 )}
 
                                 {duelResult.cardLost && (
-                                    <p className="text-system text-red mb-sm">
+                                    <p className="result-detail-item danger">
                                         ► CARD LOST TO OPPONENT
                                     </p>
                                 )}
 
                                 {duelResult.opponentEliminated && (
-                                    <p className="text-system mb-sm">
+                                    <p className="result-detail-item success">
                                         ► OPPONENT ELIMINATED
+                                    </p>
+                                )}
+
+                                {duelResult.shotgunUsed && duelResult.shotgunResult === 'wasted_on_human' && (
+                                    <p className="result-detail-item danger">
+                                        ► SHOTGUN WASTED — TARGET WAS HUMAN
                                     </p>
                                 )}
                             </div>
 
+                            {/* Continue Button */}
                             <button
-                                className="btn btn-secondary btn-block mt-lg"
-                                onClick={() => setShowResult(false)}
+                                className="btn btn-secondary btn-block"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCloseResult();
+                                }}
                             >
                                 CONTINUE
                             </button>
+
+                            <p className="text-system mt-lg" style={{
+                                fontSize: 'var(--font-size-xs)',
+                                color: 'var(--text-muted)'
+                            }}>
+                                TAP ANYWHERE TO DISMISS
+                            </p>
                         </div>
-                    </Modal>
+                    </div>
                 )}
             </div>
         </div>

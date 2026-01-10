@@ -16,13 +16,15 @@ import { getRandomStealableCard, createZombieCard } from './cards';
 /**
  * Submit a duel action
  * Returns true if valid, false if invalid
+ * For number cards, can submit up to 5 cards of the same suit
  */
 export function submitDuelAction(
     game: GameState,
     duel: Duel,
     playerId: string,
     actionType: ActionType,
-    cardId?: string
+    cardId?: string,
+    cardIds?: string[]
 ): { success: boolean; error?: string } {
     const player = getPlayer(game, playerId);
     if (!player) return { success: false, error: 'Player not found' };
@@ -35,8 +37,11 @@ export function submitDuelAction(
         return { success: false, error: 'Already submitted action' };
     }
 
+    // Normalize cardIds - use cardIds array or single cardId
+    const normalizedCardIds = cardIds && cardIds.length > 0 ? cardIds : (cardId ? [cardId] : undefined);
+
     // Validate action
-    const validation = validateAction(game, duel, player, actionType, cardId);
+    const validation = validateAction(game, duel, player, actionType, normalizedCardIds);
     if (!validation.valid) {
         return { success: false, error: validation.error };
     }
@@ -45,7 +50,8 @@ export function submitDuelAction(
     const action: DuelAction = {
         playerId,
         actionType,
-        cardId,
+        cardId: normalizedCardIds?.[0], // Keep first card for compatibility
+        cardIds: normalizedCardIds,
         timestamp: Date.now(),
     };
 
@@ -57,8 +63,8 @@ export function submitDuelAction(
     }
 
     // Set required suit if this is first number card
-    if (actionType === 'number' && cardId && !duel.requiredSuit) {
-        const card = player.numberCards.find(c => c.id === cardId);
+    if (actionType === 'number' && normalizedCardIds && normalizedCardIds.length > 0 && !duel.requiredSuit) {
+        const card = player.numberCards.find(c => c.id === normalizedCardIds[0]);
         if (card) {
             duel.requiredSuit = card.suit;
         }
@@ -69,22 +75,39 @@ export function submitDuelAction(
 
 /**
  * Validate a duel action
+ * For number cards, validates up to 5 cards of the same suit
  */
 function validateAction(
     game: GameState,
     duel: Duel,
     player: Player,
     actionType: ActionType,
-    cardId?: string
+    cardIds?: string[]
 ): { valid: boolean; error?: string } {
     switch (actionType) {
         case 'number':
-            if (!cardId) return { valid: false, error: 'Card ID required' };
-            const card = player.numberCards.find(c => c.id === cardId);
-            if (!card) return { valid: false, error: 'Card not in hand' };
+            if (!cardIds || cardIds.length === 0) return { valid: false, error: 'Card ID required' };
+            if (cardIds.length > 5) return { valid: false, error: 'Maximum 5 cards allowed' };
+
+            // Validate all cards exist and are same suit
+            const cards: NumberCard[] = [];
+            let cardSuit: string | null = null;
+
+            for (const cid of cardIds) {
+                const card = player.numberCards.find(c => c.id === cid);
+                if (!card) return { valid: false, error: 'Card not in hand' };
+
+                if (cardSuit === null) {
+                    cardSuit = card.suit;
+                } else if (card.suit !== cardSuit) {
+                    return { valid: false, error: 'All cards must be the same suit' };
+                }
+
+                cards.push(card);
+            }
 
             // Check suit rule if required suit is set
-            if (duel.requiredSuit && card.suit !== duel.requiredSuit) {
+            if (duel.requiredSuit && cardSuit !== duel.requiredSuit) {
                 // Check if player has any card of required suit
                 const hasRequiredSuit = player.numberCards.some(c => c.suit === duel.requiredSuit);
                 if (hasRequiredSuit) {
@@ -94,7 +117,7 @@ function validateAction(
                 if (CONFIG.NO_SUIT_FALLBACK === 'auto_lose') {
                     return { valid: false, error: 'No valid card - auto lose' };
                 }
-                // allow_any: card is valid even if suit doesn't match
+                // allow_any: cards are valid even if suit doesn't match
             }
             return { valid: true };
 
@@ -285,9 +308,12 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
         result.infections.push(player2.id);
         addEvent(game, 'infection', 'A player was infected');
 
-        // Remove played number card from player 2 if they played one
-        if (action2.actionType === 'number' && action2.cardId) {
-            removeNumberCard(player2, action2.cardId);
+        // Remove played number cards from player 2 if they played any
+        if (action2.actionType === 'number') {
+            const cardIds = action2.cardIds || (action2.cardId ? [action2.cardId] : []);
+            for (const cid of cardIds) {
+                removeNumberCard(player2, cid);
+            }
             p2CardUsed = true;
         }
     } else if (p2PlayedZombie && !p1PlayedZombie && action1.actionType !== 'vaccine') {
@@ -298,24 +324,38 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
         result.infections.push(player1.id);
         addEvent(game, 'infection', 'A player was infected');
 
-        // Remove played number card from player 1 if they played one
-        if (action1.actionType === 'number' && action1.cardId) {
-            removeNumberCard(player1, action1.cardId);
+        // Remove played number cards from player 1 if they played any
+        if (action1.actionType === 'number') {
+            const cardIds = action1.cardIds || (action1.cardId ? [action1.cardId] : []);
+            for (const cid of cardIds) {
+                removeNumberCard(player1, cid);
+            }
             p1CardUsed = true;
         }
     } else if (action1.actionType === 'number' && action2.actionType === 'number') {
-        // Priority 4: Number vs Number
-        const card1 = player1.numberCards.find(c => c.id === action1.cardId);
-        const card2 = player2.numberCards.find(c => c.id === action2.cardId);
+        // Priority 4: Number vs Number - sum all cards played
+        const cardIds1 = action1.cardIds || (action1.cardId ? [action1.cardId] : []);
+        const cardIds2 = action2.cardIds || (action2.cardId ? [action2.cardId] : []);
 
-        if (card1 && card2) {
-            // Remove played cards
-            removeNumberCard(player1, card1.id);
-            removeNumberCard(player2, card2.id);
+        // Get all cards and calculate sums
+        const cards1 = cardIds1.map(id => player1.numberCards.find(c => c.id === id)).filter((c): c is NumberCard => c !== undefined);
+        const cards2 = cardIds2.map(id => player2.numberCards.find(c => c.id === id)).filter((c): c is NumberCard => c !== undefined);
+
+        const sum1 = cards1.reduce((sum, card) => sum + card.value, 0);
+        const sum2 = cards2.reduce((sum, card) => sum + card.value, 0);
+
+        if (cards1.length > 0 && cards2.length > 0) {
+            // Remove all played cards from both players
+            for (const card of cards1) {
+                removeNumberCard(player1, card.id);
+            }
+            for (const card of cards2) {
+                removeNumberCard(player2, card.id);
+            }
             p1CardUsed = true;
             p2CardUsed = true;
 
-            if (card1.value > card2.value) {
+            if (sum1 > sum2) {
                 result.winnerId = player1.id;
                 result.loserId = player2.id;
                 // Winner steals a card from loser
@@ -325,7 +365,7 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                     player1.numberCards.push(stolenCard);
                     result.stolenCardId = stolenCard.id;
                 }
-            } else if (card2.value > card1.value) {
+            } else if (sum2 > sum1) {
                 result.winnerId = player2.id;
                 result.loserId = player1.id;
                 // Winner steals a card from loser

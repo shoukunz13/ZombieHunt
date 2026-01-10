@@ -68,7 +68,8 @@ export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun';
 export interface DuelAction {
     playerId: string;
     actionType: ActionType;
-    cardId?: string; // For number/vaccine/zombie cards
+    cardId?: string; // For single card (deprecated, kept for compatibility)
+    cardIds?: string[]; // For multiple number cards (same suit)
     timestamp: number;
 }
 

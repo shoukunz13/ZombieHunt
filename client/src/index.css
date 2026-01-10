@@ -807,3 +807,300 @@ body {
     font-size: var(--font-size-3xl);
   }
 }
+
+/* ============================================
+   DRAMATIC RESULT OVERLAYS
+   Full-screen impact for major events
+   ============================================ */
+
+/* Base fullscreen overlay */
+.result-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: var(--space-xl);
+  animation: result-appear 0.5s ease-out;
+}
+
+@keyframes result-appear {
+  0% {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* INFECTED state - Red pulsing */
+.result-overlay.infected {
+  background: var(--bg-primary);
+  border: 8px solid var(--accent-red);
+  animation: result-appear 0.5s ease-out, infected-pulse 2s ease-in-out infinite;
+}
+
+@keyframes infected-pulse {
+
+  0%,
+  100% {
+    border-color: var(--accent-red);
+    box-shadow: inset 0 0 100px rgba(193, 18, 31, 0.3);
+  }
+
+  50% {
+    border-color: #ff0000;
+    box-shadow: inset 0 0 150px rgba(193, 18, 31, 0.5);
+  }
+}
+
+.result-overlay.infected .result-icon {
+  font-size: 8rem;
+  animation: infected-shake 0.5s ease-in-out infinite;
+}
+
+@keyframes infected-shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-5px);
+  }
+
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* ELIMINATED / KILLED state - Death screen */
+.result-overlay.eliminated {
+  background: #000000;
+  animation: result-appear 0.5s ease-out, static-flicker 0.1s step-end infinite;
+}
+
+@keyframes static-flicker {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.98;
+  }
+}
+
+.result-overlay.eliminated::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.03) 2px,
+      rgba(255, 255, 255, 0.03) 4px);
+  pointer-events: none;
+}
+
+.result-overlay.eliminated .result-icon {
+  font-size: 8rem;
+  color: var(--accent-red);
+  animation: death-fade 2s ease-in-out infinite;
+}
+
+@keyframes death-fade {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* CURED / VACCINATED state - Clean white flash */
+.result-overlay.cured {
+  background: var(--bg-primary);
+  border: 4px solid var(--text-primary);
+  animation: result-appear 0.5s ease-out, cure-glow 2s ease-in-out infinite;
+}
+
+@keyframes cure-glow {
+
+  0%,
+  100% {
+    border-color: var(--text-primary);
+    box-shadow: inset 0 0 60px rgba(242, 242, 242, 0.1);
+  }
+
+  50% {
+    border-color: #ffffff;
+    box-shadow: inset 0 0 100px rgba(242, 242, 242, 0.2);
+  }
+}
+
+.result-overlay.cured .result-icon {
+  font-size: 8rem;
+  color: var(--text-primary);
+  animation: cure-pulse 1s ease-in-out infinite;
+}
+
+@keyframes cure-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* VICTORY state */
+.result-overlay.victory {
+  background: var(--bg-primary);
+  border: 4px solid var(--text-primary);
+}
+
+/* DEFEAT state */
+.result-overlay.defeat {
+  background: var(--bg-primary);
+  border: 4px solid var(--accent-red);
+}
+
+/* Result content */
+.result-content {
+  text-align: center;
+  max-width: 320px;
+}
+
+.result-icon {
+  font-size: 6rem;
+  margin-bottom: var(--space-lg);
+  line-height: 1;
+}
+
+.result-title {
+  font-family: var(--font-display);
+  font-size: var(--font-size-4xl);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: var(--space-md);
+  line-height: 1;
+}
+
+.result-overlay.infected .result-title {
+  color: var(--accent-red);
+}
+
+.result-overlay.eliminated .result-title {
+  color: var(--accent-red);
+}
+
+.result-overlay.cured .result-title {
+  color: var(--text-primary);
+}
+
+.result-subtitle {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-xl);
+}
+
+.result-details {
+  margin-bottom: var(--space-xl);
+}
+
+.result-detail-item {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: var(--space-sm) 0;
+  color: var(--text-secondary);
+}
+
+.result-detail-item.danger {
+  color: var(--accent-red);
+}
+
+.result-detail-item.success {
+  color: var(--text-primary);
+}
+
+/* Shotgun specific */
+.result-overlay.shotgun-kill {
+  background: var(--bg-primary);
+  animation: result-appear 0.3s ease-out, shotgun-flash 0.1s ease-out;
+}
+
+@keyframes shotgun-flash {
+  0% {
+    background: #ffffff;
+  }
+
+  100% {
+    background: var(--bg-primary);
+  }
+}
+
+/* Glitch text effect for dramatic moments */
+.glitch-text {
+  position: relative;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.glitch-text::before {
+  animation: glitch-1 0.3s infinite linear alternate-reverse;
+  color: var(--accent-red);
+  clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+}
+
+.glitch-text::after {
+  animation: glitch-2 0.3s infinite linear alternate-reverse;
+  color: var(--text-primary);
+  clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+}
+
+@keyframes glitch-1 {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-3px);
+  }
+}
+
+@keyframes glitch-2 {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(3px);
+  }
+}

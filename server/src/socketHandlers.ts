@@ -44,12 +44,13 @@ export function initializeSocketHandlers(io: Server): void {
             handleCancelSelection(io, socket);
         });
 
-        socket.on('duel_submit_action', ({ duelId, actionType, cardId }: {
+        socket.on('duel_submit_action', ({ duelId, actionType, cardId, cardIds }: {
             duelId: string;
             actionType: string;
             cardId?: string;
+            cardIds?: string[];
         }) => {
-            handleDuelAction(io, socket, duelId, actionType as any, cardId);
+            handleDuelAction(io, socket, duelId, actionType as any, cardId, cardIds);
         });
 
         socket.on('meeting_acknowledge', () => {
@@ -175,7 +176,8 @@ function handleDuelAction(
     socket: Socket,
     duelId: string,
     actionType: 'number' | 'zombie' | 'vaccine' | 'shotgun',
-    cardId?: string
+    cardId?: string,
+    cardIds?: string[]
 ): void {
     const game = getGame();
     if (!game || game.phase !== 'duel') return;
@@ -189,7 +191,7 @@ function handleDuelAction(
     // Verify player is in this duel
     if (duel.player1Id !== player.id && duel.player2Id !== player.id) return;
 
-    const result = submitDuelAction(game, duel, player.id, actionType, cardId);
+    const result = submitDuelAction(game, duel, player.id, actionType, cardId, cardIds);
 
     if (!result.success) {
         socket.emit('error', { message: result.error });
