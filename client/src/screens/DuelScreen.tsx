@@ -8,7 +8,7 @@
  * - DRAMATIC full-screen results for major events
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import {
@@ -17,6 +17,7 @@ import {
 } from '../components/shared';
 import { RulebookModal, RulebookButton } from '../components/RulebookModal';
 import { ActionType, NumberCard } from '../types';
+import { playDuelStartSound } from '../utils/sounds';
 
 export function DuelScreen() {
     const navigate = useNavigate();
@@ -64,6 +65,15 @@ export function DuelScreen() {
             setShowResult(true);
         }
     }, [duelResult]);
+
+    // Play duel start sound when entering duel
+    const hasPlayedDuelSound = useRef(false);
+    useEffect(() => {
+        if (currentDuel && !hasPlayedDuelSound.current) {
+            playDuelStartSound();
+            hasPlayedDuelSound.current = true;
+        }
+    }, [currentDuel]);
 
     // Calculate selected cards sum and suit
     const selectedCardsInfo = useMemo(() => {

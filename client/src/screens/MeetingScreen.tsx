@@ -15,6 +15,7 @@ import {
     PlayingCardComponent, DisplayTitle, SystemMessage
 } from '../components/shared';
 import { RulebookModal, RulebookButton } from '../components/RulebookModal';
+import { playMeetingSound } from '../utils/sounds';
 
 export function MeetingScreen() {
     const navigate = useNavigate();
@@ -23,6 +24,11 @@ export function MeetingScreen() {
     } = useGame();
 
     const [showRulebook, setShowRulebook] = useState(false);
+
+    // Play meeting sound on mount
+    useEffect(() => {
+        playMeetingSound();
+    }, []);
 
     // Handle phase changes
     useEffect(() => {

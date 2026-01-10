@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { playGameStartSound } from '../utils/sounds';
 
 type AlertPhase = 'game-start' | 'role-reveal' | 'done';
 
@@ -23,6 +24,9 @@ export function GameStartAlert({ round, role, onComplete }: GameStartAlertProps)
     const [animState, setAnimState] = useState<'enter' | 'show' | 'exit'>('enter');
 
     useEffect(() => {
+        // Play game start sound
+        playGameStartSound();
+
         // Phase 1: Game Start (5 seconds)
         const enterTimer = setTimeout(() => setAnimState('show'), 100);
 
