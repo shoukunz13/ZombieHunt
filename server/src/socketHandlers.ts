@@ -106,7 +106,13 @@ export function initializeSocketHandlers(io: Server): void {
 // ============ Handler Implementations ============
 
 function handleJoinGame(io: Server, socket: Socket, gameCode: string, name: string): void {
-    const game = getOrCreateGame(gameCode);
+    const game = getGame();
+
+    // Check if game exists and matches the code
+    if (!game || game.gameCode !== gameCode) {
+        socket.emit('error', { message: 'Game not found. Ask the host to create a game first.' });
+        return;
+    }
 
     // Try reconnection first
     if (game.phase !== 'waiting') {
