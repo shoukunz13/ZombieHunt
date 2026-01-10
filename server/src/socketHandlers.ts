@@ -7,7 +7,7 @@ import { Server, Socket } from 'socket.io';
 import {
     getOrCreateGame, getGame, addPlayer, findPlayerBySocketId,
     handleDisconnect, handleReconnect, selectOpponent, cancelSelection,
-    allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
+    declineInvite, allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
     startNextRound, getPlayer, getPlayerPublic, getPlayerPrivate,
     getGameStatePublic, getHostState, getFinalReveal, getAlivePlayers,
     getCurrentRoundEvents, resetGame, clearGame
@@ -42,6 +42,10 @@ export function initializeSocketHandlers(io: Server): void {
 
         socket.on('lobby_cancel_selection', () => {
             handleCancelSelection(io, socket);
+        });
+
+        socket.on('lobby_decline_invite', ({ inviterId }: { inviterId: string }) => {
+            handleDeclineInvite(io, socket, inviterId);
         });
 
         socket.on('duel_submit_action', ({ duelId, actionType, cardId, cardIds }: {
@@ -144,17 +148,30 @@ function handleSelectOpponent(io: Server, socket: Socket, opponentId: string): v
     const player = findPlayerBySocketId(game, socket.id);
     if (!player) return;
 
-    const success = selectOpponent(game, player.id, opponentId);
-    if (success) {
+    const result = selectOpponent(game, player.id, opponentId);
+    if (result.success) {
         broadcastLobbyUpdate(io, game);
         broadcastHostUpdate(io, game);
 
-        // Check if all players are paired
-        if (allPlayersPaired(game)) {
-            // Auto-start duel phase
-            startDuelPhase(game);
-            broadcastPhaseChange(io, game);
-            startPhaseTimer(io, game);
+        // If a duel was created (mutual selection), notify both players
+        if (result.duel) {
+            const opponent = getPlayer(game, opponentId);
+
+            // Notify player who just selected (player2 in the duel)
+            socket.emit('duel_assigned', {
+                duelId: result.duel.id,
+                opponentPublic: opponent ? getPlayerPublic(opponent, game) : null,
+                round: game.round,
+            });
+
+            // Notify the opponent who originally invited (player1 in the duel)
+            if (opponent?.socketId) {
+                io.to(opponent.socketId).emit('duel_assigned', {
+                    duelId: result.duel.id,
+                    opponentPublic: getPlayerPublic(player, game),
+                    round: game.round,
+                });
+            }
         }
     }
 }
@@ -171,6 +188,18 @@ function handleCancelSelection(io: Server, socket: Socket): void {
     broadcastHostUpdate(io, game);
 }
 
+function handleDeclineInvite(io: Server, socket: Socket, inviterId: string): void {
+    const game = getGame();
+    if (!game || game.phase !== 'lobby') return;
+
+    const player = findPlayerBySocketId(game, socket.id);
+    if (!player) return;
+
+    declineInvite(game, player.id, inviterId);
+    broadcastLobbyUpdate(io, game);
+    broadcastHostUpdate(io, game);
+}
+
 function handleDuelAction(
     io: Server,
     socket: Socket,
@@ -179,24 +208,55 @@ function handleDuelAction(
     cardId?: string,
     cardIds?: string[]
 ): void {
+    console.log(`[handleDuelAction] Received: duelId=${duelId}, actionType=${actionType}, cardIds=${JSON.stringify(cardIds)}`);
+
     const game = getGame();
-    if (!game || game.phase !== 'duel') return;
+    if (!game) {
+        console.log('[handleDuelAction] No game found');
+        return;
+    }
+
+    console.log(`[handleDuelAction] Game phase: ${game.phase}`);
+
+    // Allow duel actions in lobby phase (individual duels) or duel phase (legacy)
+    if (game.phase !== 'lobby' && game.phase !== 'duel') {
+        console.log(`[handleDuelAction] Wrong phase: ${game.phase}`);
+        return;
+    }
 
     const player = findPlayerBySocketId(game, socket.id);
-    if (!player) return;
+    if (!player) {
+        console.log(`[handleDuelAction] Player not found for socket: ${socket.id}`);
+        return;
+    }
+    console.log(`[handleDuelAction] Player: ${player.name}`);
 
     const duel = game.duels.get(duelId);
-    if (!duel || duel.status !== 'in_progress') return;
+    if (!duel) {
+        console.log(`[handleDuelAction] Duel not found: ${duelId}`);
+        console.log(`[handleDuelAction] Available duels: ${Array.from(game.duels.keys()).join(', ')}`);
+        return;
+    }
+    if (duel.status !== 'in_progress') {
+        console.log(`[handleDuelAction] Duel not in progress: ${duel.status}`);
+        return;
+    }
 
     // Verify player is in this duel
-    if (duel.player1Id !== player.id && duel.player2Id !== player.id) return;
+    if (duel.player1Id !== player.id && duel.player2Id !== player.id) {
+        console.log(`[handleDuelAction] Player ${player.id} not in duel (p1=${duel.player1Id}, p2=${duel.player2Id})`);
+        return;
+    }
 
+    console.log(`[handleDuelAction] Submitting action...`);
     const result = submitDuelAction(game, duel, player.id, actionType, cardId, cardIds);
 
     if (!result.success) {
+        console.log(`[handleDuelAction] Action failed: ${result.error}`);
         socket.emit('error', { message: result.error });
         return;
     }
+    console.log(`[handleDuelAction] Action succeeded!`);
 
     // Send updated duel state
     socket.emit('duel_action_confirmed', { duelId });
@@ -385,7 +445,7 @@ function broadcastLobbyUpdate(io: Server, game: GameState): void {
     const playersPublic: PlayerPublic[] = [];
 
     for (const player of game.players.values()) {
-        playersPublic.push(getPlayerPublic(player));
+        playersPublic.push(getPlayerPublic(player, game));
     }
 
     io.to(game.gameCode).emit('lobby_update', {
@@ -417,7 +477,7 @@ function broadcastPhaseChange(io: Server, game: GameState): void {
             if (player1?.socketId) {
                 io.to(player1.socketId).emit('duel_assigned', {
                     duelId: duel.id,
-                    opponentPublic: getPlayerPublic(player2!),
+                    opponentPublic: getPlayerPublic(player2!, game),
                     round: game.round,
                 });
             }
@@ -425,7 +485,7 @@ function broadcastPhaseChange(io: Server, game: GameState): void {
             if (player2?.socketId) {
                 io.to(player2.socketId).emit('duel_assigned', {
                     duelId: duel.id,
-                    opponentPublic: getPlayerPublic(player1!),
+                    opponentPublic: getPlayerPublic(player1!, game),
                     round: game.round,
                 });
             }
@@ -472,6 +532,16 @@ function resolveDuelAndNotify(io: Server, game: GameState, duel: Duel): void {
     const player1 = getPlayer(game, duel.player1Id);
     const player2 = getPlayer(game, duel.player2Id);
 
+    // Clear duel IDs and mark as having dueled
+    if (player1) {
+        player1.currentDuelId = null;
+        player1.isPaired = true; // Keep paired to indicate "completed duel this round"
+    }
+    if (player2) {
+        player2.currentDuelId = null;
+        player2.isPaired = true;
+    }
+
     if (player1?.socketId) {
         io.to(player1.socketId).emit('duel_resolution', {
             duelId: duel.id,
@@ -494,6 +564,41 @@ function resolveDuelAndNotify(io: Server, game: GameState, duel: Duel): void {
     }
     if (player2?.status === 'eliminated') {
         io.to(player2.socketId!).emit('eliminated', { reason: player2.eliminationReason });
+    }
+
+    // Check if all duels for this round are complete
+    checkRoundComplete(io, game);
+}
+
+/**
+ * Check if all alive players have completed their duels, transition to meeting if so
+ */
+function checkRoundComplete(io: Server, game: GameState): void {
+    const alivePlayers = getAlivePlayers(game);
+
+    // Count players who have completed duels (isPaired = true AND currentDuelId = null)
+    const completedCount = alivePlayers.filter(p => p.isPaired && !p.currentDuelId).length;
+
+    // Count players currently in duels
+    const inDuelCount = alivePlayers.filter(p => p.currentDuelId !== null).length;
+
+    // If odd number, one player won't duel
+    const expectedDuelers = alivePlayers.length % 2 === 0
+        ? alivePlayers.length
+        : alivePlayers.length - 1;
+
+    console.log(`[checkRoundComplete] alive=${alivePlayers.length}, completed=${completedCount}, inDuel=${inDuelCount}, expected=${expectedDuelers}`);
+    console.log(`[checkRoundComplete] Players:`, alivePlayers.map(p => ({ name: p.name, isPaired: p.isPaired, duelId: p.currentDuelId })));
+
+    // All expected duelers have completed, and no one is currently in a duel
+    if (completedCount >= expectedDuelers && inDuelCount === 0) {
+        console.log('[checkRoundComplete] Transitioning to meeting phase!');
+        // Transition to meeting phase
+        startMeetingPhase(game);
+        broadcastPhaseChange(io, game);
+        broadcastLobbyUpdate(io, game);
+        broadcastHostUpdate(io, game);
+        startPhaseTimer(io, game);
     }
 }
 

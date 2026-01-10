@@ -137,6 +137,10 @@ export interface PlayerPublic {
     isPaired: boolean;
     isConnected: boolean;
     numberCardCount: number;
+    // Invite state for new flow
+    hasOutgoingInvite: boolean;          // Has sent invite, waiting for response
+    incomingInviteFromId: string | null; // ID of player who invited you
+    isInDuel: boolean;                   // Currently in a duel
 }
 
 export interface PlayerPrivate {

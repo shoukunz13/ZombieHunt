@@ -21,20 +21,26 @@ export function DuelScreen() {
     const navigate = useNavigate();
     const {
         privateState, gameState, currentDuel, duelResult,
-        hasSubmittedAction, submitAction, isEliminated
+        hasSubmittedAction, submitAction, isEliminated, clearDuel
     } = useGame();
 
     const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
     const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
     const [showResult, setShowResult] = useState(false);
 
-    // Handle phase changes
+    // Handle phase changes - only navigate away if no longer in a duel
     useEffect(() => {
         if (!gameState) {
             navigate('/');
             return;
         }
 
+        // Stay on duel screen while we have an active duel
+        if (currentDuel) {
+            return;
+        }
+
+        // Only navigate away if duel is complete (no currentDuel)
         if (gameState.phase === 'lobby') {
             navigate('/lobby');
         } else if (gameState.phase === 'meeting') {
@@ -42,7 +48,7 @@ export function DuelScreen() {
         } else if (gameState.phase === 'ended') {
             navigate('/end');
         }
-    }, [gameState, navigate]);
+    }, [gameState, currentDuel, navigate]);
 
     useEffect(() => {
         if (isEliminated) {
@@ -108,11 +114,17 @@ export function DuelScreen() {
     };
 
     const handleConfirm = () => {
-        if (!selectedAction) return;
+        console.log('[handleConfirm] Called with:', { selectedAction, selectedCardIds, currentDuel });
+        if (!selectedAction) {
+            console.log('[handleConfirm] No selectedAction, returning');
+            return;
+        }
 
         if (selectedAction === 'number' && selectedCardIds.length > 0) {
+            console.log('[handleConfirm] Submitting number action with cards:', selectedCardIds);
             submitAction('number', selectedCardIds[0], selectedCardIds);
         } else if (selectedAction !== 'number') {
+            console.log('[handleConfirm] Submitting special action:', selectedAction);
             submitAction(selectedAction);
         }
 
@@ -131,6 +143,7 @@ export function DuelScreen() {
 
     const handleCloseResult = () => {
         setShowResult(false);
+        clearDuel(); // Clear duel state so navigation can proceed
     };
 
     const canConfirm = selectedAction && (selectedAction !== 'number' || selectedCardIds.length > 0);

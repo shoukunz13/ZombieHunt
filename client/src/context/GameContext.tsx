@@ -63,9 +63,11 @@ interface GameContextType {
     joinGame: (gameCode: string, name: string) => void;
     selectOpponent: (opponentId: string) => void;
     cancelSelection: () => void;
+    declineInvite: (inviterId: string) => void;
     submitAction: (actionType: string, cardId?: string, cardIds?: string[]) => void;
     acknowledgeRound: () => void;
     clearError: () => void;
+    clearDuel: () => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -141,6 +143,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         });
 
         newSocket.on('phase_change', (data: PhaseChangePayload) => {
+            console.log('[phase_change] Received:', data);
             setGameState(prev => prev ? {
                 ...prev,
                 phase: data.phase,
@@ -234,14 +237,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
     }, [socket]);
 
+    const declineInvite = useCallback((inviterId: string) => {
+        if (socket) {
+            socket.emit('lobby_decline_invite', { inviterId });
+        }
+    }, [socket]);
+
     const submitAction = useCallback((actionType: string, cardId?: string, cardIds?: string[]) => {
+        console.log('[submitAction] Called with:', { actionType, cardId, cardIds, socket: !!socket, currentDuel });
         if (socket && currentDuel) {
+            console.log('[submitAction] Emitting duel_submit_action');
             socket.emit('duel_submit_action', {
                 duelId: currentDuel.duelId,
                 actionType,
                 cardId,
                 cardIds,
             });
+        } else {
+            console.log('[submitAction] NOT emitting - socket:', !!socket, 'currentDuel:', currentDuel);
         }
     }, [socket, currentDuel]);
 
@@ -253,6 +266,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
     const clearError = useCallback(() => {
         setError(null);
+    }, []);
+
+    const clearDuel = useCallback(() => {
+        setCurrentDuel(null);
+        setDuelResult(null);
+        setHasSubmittedAction(false);
     }, []);
 
     const value: GameContextType = {
@@ -276,9 +295,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         joinGame,
         selectOpponent,
         cancelSelection,
+        declineInvite,
         submitAction,
         acknowledgeRound,
         clearError,
+        clearDuel,
     };
 
     return (

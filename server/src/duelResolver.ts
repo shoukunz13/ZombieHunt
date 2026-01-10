@@ -106,19 +106,9 @@ function validateAction(
                 cards.push(card);
             }
 
-            // Check suit rule if required suit is set
-            if (duel.requiredSuit && cardSuit !== duel.requiredSuit) {
-                // Check if player has any card of required suit
-                const hasRequiredSuit = player.numberCards.some(c => c.suit === duel.requiredSuit);
-                if (hasRequiredSuit) {
-                    return { valid: false, error: `Must play ${duel.requiredSuit}` };
-                }
-                // If no matching suit, check fallback mode
-                if (CONFIG.NO_SUIT_FALLBACK === 'auto_lose') {
-                    return { valid: false, error: 'No valid card - auto lose' };
-                }
-                // allow_any: cards are valid even if suit doesn't match
-            }
+            // NOTE: Each player can play any suit they want - only constraint is
+            // all cards in their own hand must be same suit (already validated above)
+            // No need to match opponent's suit
             return { valid: true };
 
         case 'zombie':

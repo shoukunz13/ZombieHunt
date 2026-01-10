@@ -1,44 +1,51 @@
 /**
  * ZOMBIE HUNT — Lobby Screen
  * 
- * Design: Tense, silent atmosphere
- * - Vertical player list
- * - Selected opponent turns RED
- * - Status text emphasizing distrust
- * - No timers, emphasize tension
+ * Design: Tense waiting room atmosphere
+ * - Show invite states (sent invite, received invite)
+ * - Click player name to send invite
+ * - Accept incoming invite to start duel
  */
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import {
-    ConnectionStatus, RoleBadge, SpecialIcons, StatusBadge,
-    SystemMessage
+    ConnectionStatus, RoleBadge, SystemMessage, SpecialIcons
 } from '../components/shared';
 
 export function LobbyScreen() {
     const navigate = useNavigate();
     const {
-        isConnected, playerId, privateState, gameState,
-        players, pairingStatus, selectOpponent, cancelSelection,
+        isConnected, privateState, gameState, players, playerId,
+        pairingStatus, selectOpponent, cancelSelection, declineInvite, currentDuel,
         isEliminated
     } = useGame();
 
     // Handle phase changes
     useEffect(() => {
+        console.log('[LobbyScreen] Navigation check:', {
+            gameState: gameState?.phase,
+            currentDuel: !!currentDuel
+        });
+
         if (!gameState) {
             navigate('/');
             return;
         }
 
-        if (gameState.phase === 'duel') {
+        // Navigate to duel when assigned
+        if (currentDuel) {
+            console.log('[LobbyScreen] Navigating to /duel');
             navigate('/duel');
         } else if (gameState.phase === 'meeting') {
+            console.log('[LobbyScreen] Navigating to /meeting');
             navigate('/meeting');
         } else if (gameState.phase === 'ended') {
+            console.log('[LobbyScreen] Navigating to /end');
             navigate('/end');
         }
-    }, [gameState, navigate]);
+    }, [gameState, currentDuel, navigate]);
 
     useEffect(() => {
         if (isEliminated) {
@@ -46,7 +53,7 @@ export function LobbyScreen() {
         }
     }, [isEliminated, navigate]);
 
-    if (!privateState) {
+    if (!privateState || !gameState) {
         return (
             <div className="container">
                 <div className="screen screen-centered">
@@ -58,18 +65,44 @@ export function LobbyScreen() {
 
     // Find current player in list
     const currentPlayerPublic = players.find(p => p.id === playerId);
+    const hasOutgoingInvite = currentPlayerPublic?.hasOutgoingInvite || false;
+    const incomingInviteFromId = currentPlayerPublic?.incomingInviteFromId || null;
+    const isInDuel = currentPlayerPublic?.isInDuel || false;
     const isPaired = currentPlayerPublic?.isPaired || false;
+    const hasCompletedDuel = isPaired && !isInDuel && !hasOutgoingInvite;
 
-    // Available opponents (alive, not paired, not self)
+    // Find the player who invited us
+    const inviterPlayer = incomingInviteFromId ? players.find(p => p.id === incomingInviteFromId) : null;
+
+    // Find who we invited
+    const invitedPlayer = hasOutgoingInvite
+        ? players.find(p => p.incomingInviteFromId === playerId)
+        : null;
+
+    // Available opponents (alive, not in duel, not busy, not self)
     const availablePlayers = players.filter(p =>
         p.id !== playerId &&
         p.isAlive &&
-        !p.isPaired
+        !p.isPaired &&
+        !p.isInDuel &&
+        !p.hasOutgoingInvite
     );
 
     const handleSelectOpponent = (opponentId: string) => {
-        if (!isPaired) {
+        if (!hasOutgoingInvite && !incomingInviteFromId && !isInDuel && !hasCompletedDuel) {
             selectOpponent(opponentId);
+        }
+    };
+
+    const handleAcceptInvite = () => {
+        if (incomingInviteFromId) {
+            selectOpponent(incomingInviteFromId);
+        }
+    };
+
+    const handleDeclineInvite = () => {
+        if (incomingInviteFromId) {
+            declineInvite(incomingInviteFromId);
         }
     };
 
@@ -88,7 +121,7 @@ export function LobbyScreen() {
                             {gameState?.phase === 'waiting' ? 'WAITING ROOM' : `ROUND ${gameState?.round}`}
                         </h2>
                         <SystemMessage>
-                            {gameState?.phase === 'waiting' ? 'STANDBY FOR ORDERS' : 'DISCUSSION PHASE'}
+                            {gameState?.phase === 'waiting' ? 'STANDBY FOR ORDERS' : 'SELECT YOUR TARGET'}
                         </SystemMessage>
                     </div>
                     <ConnectionStatus isConnected={isConnected} />
@@ -122,29 +155,101 @@ export function LobbyScreen() {
                     </div>
                 </div>
 
-                {/* Pairing Status */}
-                {isPaired ? (
+                {/* INCOMING INVITE - Show prominently */}
+                {incomingInviteFromId && inviterPlayer && (
                     <div className="card" style={{
                         textAlign: 'center',
-                        borderColor: 'var(--accent-red)'
+                        borderColor: 'var(--accent-red)',
+                        marginBottom: 'var(--space-lg)'
                     }}>
                         <p className="heading-display" style={{
                             fontSize: 'var(--font-size-lg)',
                             color: 'var(--accent-red)',
+                            marginBottom: 'var(--space-sm)'
+                        }}>
+                            DUEL REQUEST
+                        </p>
+                        <p className="heading-display" style={{
+                            fontSize: 'var(--font-size-2xl)',
                             marginBottom: 'var(--space-md)'
                         }}>
-                            OPPONENT LOCKED
+                            {inviterPlayer.name}
                         </p>
-                        <SystemMessage>AWAITING ALL PARTICIPANTS</SystemMessage>
+                        <SystemMessage>CHALLENGES YOU TO DUEL</SystemMessage>
+                        <div style={{
+                            display: 'flex',
+                            gap: 'var(--space-md)',
+                            marginTop: 'var(--space-lg)',
+                            justifyContent: 'center'
+                        }}>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleAcceptInvite}
+                            >
+                                ACCEPT
+                            </button>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={handleDeclineInvite}
+                            >
+                                DECLINE
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* OUTGOING INVITE - Waiting for response */}
+                {hasOutgoingInvite && !incomingInviteFromId && (
+                    <div className="card" style={{
+                        textAlign: 'center',
+                        borderColor: 'var(--text-muted)',
+                        marginBottom: 'var(--space-lg)'
+                    }}>
+                        <p className="heading-display" style={{
+                            fontSize: 'var(--font-size-lg)',
+                            marginBottom: 'var(--space-sm)'
+                        }}>
+                            INVITE SENT
+                        </p>
+                        {invitedPlayer && (
+                            <p className="heading-display" style={{
+                                fontSize: 'var(--font-size-2xl)',
+                                marginBottom: 'var(--space-md)'
+                            }}>
+                                {invitedPlayer.name}
+                            </p>
+                        )}
+                        <SystemMessage>AWAITING RESPONSE</SystemMessage>
+                        <div className="spinner" style={{ margin: 'var(--space-lg) auto' }} />
                         <button
                             className="btn btn-secondary btn-sm"
                             onClick={cancelSelection}
-                            style={{ marginTop: 'var(--space-lg)' }}
                         >
-                            CANCEL
+                            CANCEL INVITE
                         </button>
                     </div>
-                ) : (
+                )}
+
+                {/* COMPLETED DUEL - Waiting for others */}
+                {hasCompletedDuel && (
+                    <div className="card" style={{
+                        textAlign: 'center',
+                        borderColor: 'var(--text-muted)',
+                        marginBottom: 'var(--space-lg)'
+                    }}>
+                        <p className="heading-display" style={{
+                            fontSize: 'var(--font-size-lg)',
+                            marginBottom: 'var(--space-md)'
+                        }}>
+                            DUEL COMPLETE
+                        </p>
+                        <SystemMessage>AWAITING OTHER PARTICIPANTS</SystemMessage>
+                        <div className="spinner" style={{ margin: 'var(--space-lg) auto' }} />
+                    </div>
+                )}
+
+                {/* OPPONENT SELECTION - Only show if not in other states */}
+                {!hasOutgoingInvite && !incomingInviteFromId && !hasCompletedDuel && !isInDuel && (
                     <div className="card">
                         <div className="card-header">
                             <span>SELECT TARGET</span>
@@ -183,45 +288,17 @@ export function LobbyScreen() {
                     </div>
                 )}
 
-                {/* All Players */}
-                <div className="card" style={{ marginTop: 'auto' }}>
-                    <div className="card-header">
-                        <span>ALL PARTICIPANTS</span>
-                        <span>{players.filter(p => p.isAlive).length} ALIVE</span>
+                {/* Game Info */}
+                {gameState?.phase === 'waiting' && (
+                    <div style={{
+                        marginTop: 'var(--space-xl)',
+                        textAlign: 'center'
+                    }}>
+                        <SystemMessage>
+                            {players.length} PARTICIPANTS CONNECTED
+                        </SystemMessage>
                     </div>
-                    <div className="player-list" style={{ maxHeight: '160px', overflowY: 'auto' }}>
-                        {players.map(player => (
-                            <div
-                                key={player.id}
-                                className={`player-item disabled`}
-                                style={{
-                                    padding: 'var(--space-sm) var(--space-md)',
-                                    opacity: player.isAlive ? 1 : 0.3
-                                }}
-                            >
-                                <span className="player-name">
-                                    {player.name}
-                                    {player.id === playerId && ' [YOU]'}
-                                </span>
-                                <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                                    {player.isPaired && <StatusBadge status="paired" label="PAIRED" />}
-                                    {!player.isAlive && <StatusBadge status="dead" label="DEAD" />}
-                                    {!player.isConnected && player.isAlive && (
-                                        <span className="status-dot disconnected" />
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Footer Warning */}
-                <div style={{
-                    marginTop: 'var(--space-lg)',
-                    textAlign: 'center'
-                }}>
-                    <SystemMessage>TRUST NO ONE</SystemMessage>
-                </div>
+                )}
             </div>
         </div>
     );

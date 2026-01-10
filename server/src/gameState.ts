@@ -257,48 +257,98 @@ export function handleReconnect(game: GameState, name: string, socketId: string)
 }
 
 /**
- * Select opponent in lobby
+ * Select opponent in lobby - creates duel immediately if mutual selection
+ * Returns the duel if created, null otherwise
  */
-export function selectOpponent(game: GameState, playerId: string, opponentId: string): boolean {
-    if (game.phase !== 'lobby') return false;
+export function selectOpponent(game: GameState, playerId: string, opponentId: string): { success: boolean; duel?: Duel } {
+    if (game.phase !== 'lobby') return { success: false };
 
     const player = getPlayer(game, playerId);
     const opponent = getPlayer(game, opponentId);
 
-    if (!player || !opponent) return false;
-    if (player.status !== 'alive' || opponent.status !== 'alive') return false;
-    if (player.isPaired || opponent.isPaired) return false;
-    if (playerId === opponentId) return false;
+    if (!player || !opponent) return { success: false };
+    if (player.status !== 'alive' || opponent.status !== 'alive') return { success: false };
+    if (player.isPaired || opponent.isPaired) return { success: false };
+    if (player.currentDuelId || opponent.currentDuelId) return { success: false }; // Already in duel
+    if (playerId === opponentId) return { success: false };
 
-    // Immediate lock pairing
+    // Check if opponent has already selected this player (mutual selection)
+    if (opponent.selectedOpponentId === playerId) {
+        // Mutual selection! Create duel immediately
+        player.selectedOpponentId = opponentId;
+        player.isPaired = true;
+        opponent.isPaired = true;
+
+        // Create duel
+        const duel: Duel = {
+            id: uuidv4(),
+            round: game.round,
+            player1Id: opponent.id, // Opponent was first to select
+            player2Id: player.id,   // Player accepted
+            status: 'in_progress',
+        };
+
+        game.duels.set(duel.id, duel);
+        game.currentRoundDuels.push(duel.id);
+
+        player.currentDuelId = duel.id;
+        opponent.currentDuelId = duel.id;
+
+        saveGame(game);
+        return { success: true, duel };
+    }
+
+    // One-sided selection (invite sent, waiting for acceptance)
     player.selectedOpponentId = opponentId;
-    opponent.selectedOpponentId = playerId;
-    player.isPaired = true;
-    opponent.isPaired = true;
+    saveGame(game);
+    return { success: true };
+}
+
+/**
+ * Cancel outgoing invite/selection
+ */
+export function cancelSelection(game: GameState, playerId: string): boolean {
+    if (game.phase !== 'lobby') return false;
+
+    const player = getPlayer(game, playerId);
+    if (!player) return false;
+
+    // If player has no outgoing selection, nothing to cancel
+    if (!player.selectedOpponentId) return false;
+
+    const opponent = getPlayer(game, player.selectedOpponentId);
+
+    // Clear player's selection
+    player.selectedOpponentId = null;
+    player.isPaired = false;
+
+    // If opponent also had selected this player (mutual), clear them too
+    if (opponent && opponent.selectedOpponentId === playerId) {
+        opponent.selectedOpponentId = null;
+        opponent.isPaired = false;
+    }
 
     saveGame(game);
     return true;
 }
 
 /**
- * Cancel opponent selection
+ * Decline incoming invite from another player
  */
-export function cancelSelection(game: GameState, playerId: string): boolean {
+export function declineInvite(game: GameState, playerId: string, inviterId: string): boolean {
     if (game.phase !== 'lobby') return false;
 
     const player = getPlayer(game, playerId);
-    if (!player || !player.isPaired) return false;
+    const inviter = getPlayer(game, inviterId);
 
-    const opponent = player.selectedOpponentId ? getPlayer(game, player.selectedOpponentId) : null;
+    if (!player || !inviter) return false;
 
-    // Unpair both
-    player.selectedOpponentId = null;
-    player.isPaired = false;
+    // Verify inviter actually invited this player
+    if (inviter.selectedOpponentId !== playerId) return false;
 
-    if (opponent) {
-        opponent.selectedOpponentId = null;
-        opponent.isPaired = false;
-    }
+    // Clear inviter's selection
+    inviter.selectedOpponentId = null;
+    inviter.isPaired = false;
 
     saveGame(game);
     return true;
@@ -372,7 +422,8 @@ export function startDuelPhase(game: GameState): void {
  * Transition to meeting phase
  */
 export function startMeetingPhase(game: GameState): void {
-    if (game.phase !== 'duel') return;
+    // Allow transition from both 'duel' (legacy) and 'lobby' (new individual duel flow)
+    if (game.phase !== 'duel' && game.phase !== 'lobby') return;
 
     game.phase = 'meeting';
     game.phaseEndsAt = Date.now() + CONFIG.MEETING_DURATION_SEC * 1000;
@@ -469,8 +520,21 @@ export function addEvent(game: GameState, type: PublicEvent['type'], message: st
 
 /**
  * Get public player view
+ * @param player The player to get public view for
+ * @param game Optional game state for computing incoming invite info
  */
-export function getPlayerPublic(player: Player): PlayerPublic {
+export function getPlayerPublic(player: Player, game?: GameState): PlayerPublic {
+    // Find who has invited this player (if any)
+    let incomingInviteFromId: string | null = null;
+    if (game && !player.isPaired && !player.currentDuelId) {
+        for (const otherPlayer of game.players.values()) {
+            if (otherPlayer.selectedOpponentId === player.id && !otherPlayer.isPaired) {
+                incomingInviteFromId = otherPlayer.id;
+                break;
+            }
+        }
+    }
+
     return {
         id: player.id,
         name: player.name,
@@ -478,6 +542,9 @@ export function getPlayerPublic(player: Player): PlayerPublic {
         isPaired: player.isPaired,
         isConnected: player.socketId !== null,
         numberCardCount: player.numberCards.length,
+        hasOutgoingInvite: player.selectedOpponentId !== null && !player.isPaired,
+        incomingInviteFromId,
+        isInDuel: player.currentDuelId !== null,
     };
 }
 
