@@ -29,6 +29,7 @@ interface HostContextType {
     startGame: () => void;
     forcePhase: (phase: string) => void;
     kickPlayer: (playerId: string) => void;
+    endGame: () => void;
 }
 
 const HostContext = createContext<HostContextType | null>(null);
@@ -84,6 +85,13 @@ export function HostProvider({ children }: { children: ReactNode }) {
             setHostState(data.hostState);
         });
 
+        newSocket.on('host_game_ended', () => {
+            console.log('Game ended by host');
+            setCurrentGameCode(null);
+            setHostState(null);
+            setEvents([]);
+        });
+
         newSocket.on('error', (data: { message: string }) => {
             console.error('Host error:', data.message);
         });
@@ -125,6 +133,12 @@ export function HostProvider({ children }: { children: ReactNode }) {
         }
     }, [socket, isAuthenticated]);
 
+    const endGame = useCallback(() => {
+        if (socket && isAuthenticated) {
+            socket.emit('host_end_game');
+        }
+    }, [socket, isAuthenticated]);
+
     const value: HostContextType = {
         socket,
         isConnected,
@@ -138,6 +152,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
         startGame,
         forcePhase,
         kickPlayer,
+        endGame,
     };
 
     return (

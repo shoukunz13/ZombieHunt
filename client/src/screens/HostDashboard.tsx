@@ -15,7 +15,7 @@ import { ConnectionStatus, EventItem, DisplayTitle, SystemMessage } from '../com
 function HostDashboardContent() {
     const {
         isConnected, isAuthenticated, hostState, events, authError,
-        currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer
+        currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer, endGame
     } = useHost();
 
     const [pin, setPin] = useState('');
@@ -229,6 +229,17 @@ function HostDashboardContent() {
                             disabled={!hostState || hostState.phase !== 'meeting'}
                         >
                             NEXT ROUND
+                        </button>
+                        <button
+                            className="btn btn-danger"
+                            onClick={() => {
+                                if (confirm('END GAME? This will remove all players and delete the lobby.')) {
+                                    endGame();
+                                }
+                            }}
+                            disabled={!currentGameCode}
+                        >
+                            END GAME
                         </button>
                     </div>
                 </div>

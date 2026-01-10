@@ -189,6 +189,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setYourOutcome(data.yourOutcome);
         });
 
+        newSocket.on('game_force_ended', () => {
+            // Reset all state - game was terminated by host
+            setPlayerId(null);
+            setGameState(null);
+            setPrivateState(null);
+            setPlayers([]);
+            setPairingStatus(null);
+            setCurrentDuel(null);
+            setDuelResult(null);
+            setHasSubmittedAction(false);
+            setRoundEvents([]);
+            setFinalReveal(null);
+            setYourOutcome(null);
+            setIsEliminated(false);
+            setEliminationReason(null);
+            setError('Game has been terminated by host');
+        });
+
         setSocket(newSocket);
 
         return () => {

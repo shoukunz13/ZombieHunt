@@ -10,7 +10,7 @@ import {
     allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
     startNextRound, getPlayer, getPlayerPublic, getPlayerPrivate,
     getGameStatePublic, getHostState, getFinalReveal, getAlivePlayers,
-    getCurrentRoundEvents, resetGame
+    getCurrentRoundEvents, resetGame, clearGame
 } from './gameState';
 import {
     submitDuelAction, resolveDuel, isDuelReady, getDuelResultPrivate,
@@ -80,6 +80,10 @@ export function initializeSocketHandlers(io: Server): void {
 
         socket.on('host_create_game', ({ gameCode }: { gameCode: string }) => {
             handleHostCreateGame(io, socket, gameCode);
+        });
+
+        socket.on('host_end_game', () => {
+            handleHostEndGame(io, socket);
         });
 
         // ============ Disconnect ============
@@ -238,6 +242,38 @@ function handleHostCreateGame(io: Server, socket: Socket, gameCode: string): voi
     socket.emit('host_game_created', {
         gameCode: sanitizedCode,
         hostState: getHostState(game),
+    });
+}
+
+function handleHostEndGame(io: Server, socket: Socket): void {
+    if (socket.id !== hostSocketId) return;
+
+    const game = getGame();
+
+    // Clear any phase timer
+    if (phaseTimer) {
+        clearTimeout(phaseTimer);
+        phaseTimer = null;
+    }
+
+    // Notify all players that game has ended
+    if (game) {
+        io.to(game.gameCode).emit('game_force_ended', {
+            message: 'Game has been terminated by host'
+        });
+
+        // Disconnect all players from the game room
+        io.in(game.gameCode).socketsLeave(game.gameCode);
+    }
+
+    // Clear the game
+    clearGame();
+
+    console.log('Host force ended the game');
+
+    // Notify host
+    socket.emit('host_game_ended', {
+        message: 'Game terminated successfully'
     });
 }
 

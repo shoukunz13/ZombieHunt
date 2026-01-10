@@ -48,6 +48,13 @@ export function resetGame(gameCode: string): GameState {
 }
 
 /**
+ * Completely clear the current game (for host force end)
+ */
+export function clearGame(): void {
+    currentGame = null;
+}
+
+/**
  * Get current game or create one
  */
 export function getOrCreateGame(gameCode: string): GameState {
@@ -158,8 +165,18 @@ export function startGame(game: GameState): boolean {
     // Shuffle players for random team assignment
     const shuffledPlayers = shuffleArray(playerArray);
 
-    // Calculate team sizes
-    const teamCount = CONFIG.TEAM_COUNT;
+    // Calculate team count based on player count
+    // Target: ~4-5 players per team, 1 zombie per team
+    // Examples:
+    //   4 players  → 1 team  → 1 zombie
+    //   5-8 players → 2 teams → 2 zombies
+    //   9-12 players → 3 teams → 3 zombies
+    //   13-16 players → 4 teams → 4 zombies
+    //   17-20 players → 4 teams → 4 zombies (cap at max teams)
+    const playersPerTeam = 4;
+    const maxTeams = CONFIG.TEAM_COUNT;
+    const teamCount = Math.min(maxTeams, Math.max(1, Math.ceil(playerCount / playersPerTeam)));
+
     const baseTeamSize = Math.floor(playerCount / teamCount);
     const extraPlayers = playerCount % teamCount;
 

@@ -10,7 +10,7 @@ export const CONFIG = {
 
     // Game settings
     TEAM_COUNT: 4, // Number of teams (for N=20, this gives 5 per team)
-    MIN_PLAYERS: 6, // Minimum players to start
+    MIN_PLAYERS: 4, // Minimum players to start
     ROUNDS: 20, // Total rounds in a game
 
     // Card settings
