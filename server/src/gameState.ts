@@ -218,11 +218,24 @@ export function startGame(game: GameState): boolean {
         shuffledPlayers[idx].vaccineCard = createVaccineCard();
     }
 
-    // Update game state
-    game.phase = 'lobby';
+    // Update game state - start with intro phase for video
+    game.phase = 'intro';
     game.round = 1;
     game.startedAt = Date.now();
 
+    saveGame(game);
+
+    return true;
+}
+
+/**
+ * Complete the intro video and transition to lobby
+ * Called when host finishes showing the intro video
+ */
+export function completeIntro(game: GameState): boolean {
+    if (game.phase !== 'intro') return false;
+
+    game.phase = 'lobby';
     addEvent(game, 'round_start', `Round 1 begins`);
     saveGame(game);
 

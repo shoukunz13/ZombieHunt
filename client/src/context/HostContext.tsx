@@ -30,6 +30,7 @@ interface HostContextType {
     forcePhase: (phase: string) => void;
     kickPlayer: (playerId: string) => void;
     endGame: () => void;
+    completeIntro: () => void;
 }
 
 const HostContext = createContext<HostContextType | null>(null);
@@ -139,6 +140,12 @@ export function HostProvider({ children }: { children: ReactNode }) {
         }
     }, [socket, isAuthenticated]);
 
+    const completeIntro = useCallback(() => {
+        if (socket && isAuthenticated) {
+            socket.emit('host_intro_complete');
+        }
+    }, [socket, isAuthenticated]);
+
     const value: HostContextType = {
         socket,
         isConnected,
@@ -153,6 +160,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
         forcePhase,
         kickPlayer,
         endGame,
+        completeIntro,
     };
 
     return (

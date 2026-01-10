@@ -10,7 +10,7 @@ import {
     declineInvite, allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
     startNextRound, getPlayer, getPlayerPublic, getPlayerPrivate,
     getGameStatePublic, getHostState, getFinalReveal, getAlivePlayers,
-    getCurrentRoundEvents, resetGame, clearGame
+    getCurrentRoundEvents, resetGame, clearGame, completeIntro
 } from './gameState';
 import {
     submitDuelAction, resolveDuel, isDuelReady, getDuelResultPrivate,
@@ -89,6 +89,10 @@ export function initializeSocketHandlers(io: Server): void {
 
         socket.on('host_end_game', () => {
             handleHostEndGame(io, socket);
+        });
+
+        socket.on('host_intro_complete', () => {
+            handleHostIntroComplete(io, socket);
         });
 
         // ============ Disconnect ============
@@ -337,6 +341,21 @@ function handleHostEndGame(io: Server, socket: Socket): void {
     socket.emit('host_game_ended', {
         message: 'Game terminated successfully'
     });
+}
+
+function handleHostIntroComplete(io: Server, socket: Socket): void {
+    if (socket.id !== hostSocketId) return;
+
+    const game = getGame();
+    if (!game) return;
+
+    const success = completeIntro(game);
+    if (success) {
+        console.log('Host completed intro video, transitioning to lobby');
+        broadcastPhaseChange(io, game);
+        broadcastLobbyUpdate(io, game);
+        broadcastHostUpdate(io, game);
+    }
 }
 
 function handleHostStartGame(io: Server, socket: Socket): void {

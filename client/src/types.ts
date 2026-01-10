@@ -5,7 +5,7 @@
 
 export type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
 export type Role = 'human' | 'zombie';
-export type GamePhase = 'waiting' | 'lobby' | 'duel' | 'meeting' | 'ended';
+export type GamePhase = 'waiting' | 'intro' | 'lobby' | 'duel' | 'meeting' | 'ended';
 export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun';
 
 export interface NumberCard {

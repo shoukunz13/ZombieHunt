@@ -60,13 +60,35 @@ export function LobbyScreen() {
         }
     }, [isEliminated, navigate]);
 
-    // Detect game start (transition from 'waiting' to 'lobby')
+    // Detect game start (transition from 'intro' to 'lobby', after host video completes)
     useEffect(() => {
-        if (prevPhaseRef.current === 'waiting' && gameState?.phase === 'lobby') {
+        if (prevPhaseRef.current === 'intro' && gameState?.phase === 'lobby') {
             setShowGameStart(true);
         }
         prevPhaseRef.current = gameState?.phase || null;
     }, [gameState?.phase]);
+
+    // Show intro waiting screen when in intro phase
+    if (gameState?.phase === 'intro') {
+        return (
+            <div className="container">
+                <div className="screen screen-centered">
+                    <div style={{ textAlign: 'center' }}>
+                        <h1 className="heading-display" style={{
+                            fontSize: 'var(--font-size-3xl)',
+                            marginBottom: 'var(--space-xl)'
+                        }}>
+                            GAME STARTING
+                        </h1>
+                        <p className="text-muted" style={{ marginBottom: 'var(--space-lg)' }}>
+                            PLEASE WATCH THE SCREEN
+                        </p>
+                        <div className="spinner" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (!privateState || !gameState) {
         return (

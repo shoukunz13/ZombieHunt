@@ -99,7 +99,7 @@ export interface Duel {
 
 // ============ Game Phase Types ============
 
-export type GamePhase = 'waiting' | 'lobby' | 'duel' | 'meeting' | 'ended';
+export type GamePhase = 'waiting' | 'intro' | 'lobby' | 'duel' | 'meeting' | 'ended';
 
 export interface PublicEvent {
     id: string;

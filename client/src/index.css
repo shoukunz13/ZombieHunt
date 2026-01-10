@@ -1344,3 +1344,80 @@ body {
   letter-spacing: 0.2em;
   animation: blink 1.5s ease-in-out infinite;
 }
+
+/* ============================================
+   INTRO VIDEO OVERLAY
+   ============================================ */
+.intro-video-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intro-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.intro-video-skip {
+  position: absolute;
+  bottom: var(--space-xl);
+  right: var(--space-xl);
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-sm) var(--space-lg);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.intro-video-skip:hover {
+  background: rgba(139, 0, 0, 0.4);
+  color: var(--text-primary);
+  border-color: var(--accent-red);
+}
+
+.intro-video-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  letter-spacing: 0.2em;
+  pointer-events: none;
+  animation: blink 1s ease-in-out infinite;
+}
+
+.intro-video-container video:not([src=""])~.intro-video-loading {
+  display: none;
+}
+
+.intro-video-error {
+  text-align: center;
+}
+
+.intro-video-error h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: var(--font-size-2xl);
+  color: var(--accent-red);
+  margin-bottom: var(--space-md);
+}
+
+.intro-video-error p {
+  color: var(--text-muted);
+  margin-bottom: var(--space-xl);
+}

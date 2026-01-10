@@ -11,11 +11,13 @@
 import { useState } from 'react';
 import { useHost, HostProvider } from '../context/HostContext';
 import { ConnectionStatus, EventItem, DisplayTitle, SystemMessage } from '../components/shared';
+import { IntroVideo } from '../components/IntroVideo';
 
 function HostDashboardContent() {
     const {
         isConnected, isAuthenticated, hostState, events, authError,
-        currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer, endGame
+        currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer, endGame,
+        completeIntro
     } = useHost();
 
     const [pin, setPin] = useState('');
@@ -87,6 +89,11 @@ function HostDashboardContent() {
     // Dashboard
     return (
         <div className="container host-dashboard">
+            {/* Intro Video - fullscreen overlay */}
+            {hostState?.phase === 'intro' && (
+                <IntroVideo onComplete={completeIntro} />
+            )}
+
             <div className="screen">
                 {/* Header */}
                 <div style={{
