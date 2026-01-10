@@ -1,0 +1,471 @@
+/**
+ * Zombie Hunt - Duel Resolution Logic
+ * Handles all duel mechanics including special cards and stealing.
+ */
+
+import {
+    Duel, DuelAction, DuelResult, Player, GameState,
+    NumberCard, DuelResultPrivate, ActionType
+} from './types';
+import { CONFIG } from './config';
+import {
+    getPlayer, eliminatePlayer, infectPlayer, curePlayer, addEvent
+} from './gameState';
+import { getRandomStealableCard, createZombieCard } from './cards';
+
+/**
+ * Submit a duel action
+ * Returns true if valid, false if invalid
+ */
+export function submitDuelAction(
+    game: GameState,
+    duel: Duel,
+    playerId: string,
+    actionType: ActionType,
+    cardId?: string
+): { success: boolean; error?: string } {
+    const player = getPlayer(game, playerId);
+    if (!player) return { success: false, error: 'Player not found' };
+
+    // Determine which action slot to use
+    const isPlayer1 = duel.player1Id === playerId;
+    const existingAction = isPlayer1 ? duel.action1 : duel.action2;
+
+    if (existingAction) {
+        return { success: false, error: 'Already submitted action' };
+    }
+
+    // Validate action
+    const validation = validateAction(game, duel, player, actionType, cardId);
+    if (!validation.valid) {
+        return { success: false, error: validation.error };
+    }
+
+    // Create action
+    const action: DuelAction = {
+        playerId,
+        actionType,
+        cardId,
+        timestamp: Date.now(),
+    };
+
+    // Set action
+    if (isPlayer1) {
+        duel.action1 = action;
+    } else {
+        duel.action2 = action;
+    }
+
+    // Set required suit if this is first number card
+    if (actionType === 'number' && cardId && !duel.requiredSuit) {
+        const card = player.numberCards.find(c => c.id === cardId);
+        if (card) {
+            duel.requiredSuit = card.suit;
+        }
+    }
+
+    return { success: true };
+}
+
+/**
+ * Validate a duel action
+ */
+function validateAction(
+    game: GameState,
+    duel: Duel,
+    player: Player,
+    actionType: ActionType,
+    cardId?: string
+): { valid: boolean; error?: string } {
+    switch (actionType) {
+        case 'number':
+            if (!cardId) return { valid: false, error: 'Card ID required' };
+            const card = player.numberCards.find(c => c.id === cardId);
+            if (!card) return { valid: false, error: 'Card not in hand' };
+
+            // Check suit rule if required suit is set
+            if (duel.requiredSuit && card.suit !== duel.requiredSuit) {
+                // Check if player has any card of required suit
+                const hasRequiredSuit = player.numberCards.some(c => c.suit === duel.requiredSuit);
+                if (hasRequiredSuit) {
+                    return { valid: false, error: `Must play ${duel.requiredSuit}` };
+                }
+                // If no matching suit, check fallback mode
+                if (CONFIG.NO_SUIT_FALLBACK === 'auto_lose') {
+                    return { valid: false, error: 'No valid card - auto lose' };
+                }
+                // allow_any: card is valid even if suit doesn't match
+            }
+            return { valid: true };
+
+        case 'zombie':
+            if (!player.zombieCard) return { valid: false, error: 'No zombie card' };
+            return { valid: true };
+
+        case 'vaccine':
+            if (!player.vaccineCard) return { valid: false, error: 'No vaccine card' };
+            return { valid: true };
+
+        case 'shotgun':
+            if (!player.hasShotgun) return { valid: false, error: 'No shotgun' };
+            return { valid: true };
+
+        default:
+            return { valid: false, error: 'Invalid action type' };
+    }
+}
+
+/**
+ * Check if duel is ready to resolve
+ */
+export function isDuelReady(duel: Duel): boolean {
+    return duel.action1 !== undefined && duel.action2 !== undefined;
+}
+
+/**
+ * Auto-submit for disconnected players
+ */
+export function autoSubmitForDisconnected(game: GameState, duel: Duel): void {
+    if (!CONFIG.DISCONNECT_AUTOPLAY) return;
+
+    const player1 = getPlayer(game, duel.player1Id);
+    const player2 = getPlayer(game, duel.player2Id);
+
+    // Auto-submit for player 1 if disconnected and no action
+    if (player1 && !duel.action1 && !player1.socketId) {
+        const lowestCard = getLowestValidCard(player1, duel.requiredSuit);
+        if (lowestCard) {
+            duel.action1 = {
+                playerId: player1.id,
+                actionType: 'number',
+                cardId: lowestCard.id,
+                timestamp: Date.now(),
+            };
+            if (!duel.requiredSuit) {
+                duel.requiredSuit = lowestCard.suit;
+            }
+        }
+    }
+
+    // Auto-submit for player 2 if disconnected and no action
+    if (player2 && !duel.action2 && !player2.socketId) {
+        const lowestCard = getLowestValidCard(player2, duel.requiredSuit);
+        if (lowestCard) {
+            duel.action2 = {
+                playerId: player2.id,
+                actionType: 'number',
+                cardId: lowestCard.id,
+                timestamp: Date.now(),
+            };
+            if (!duel.requiredSuit) {
+                duel.requiredSuit = lowestCard.suit;
+            }
+        }
+    }
+}
+
+/**
+ * Get lowest valid card for auto-play
+ */
+function getLowestValidCard(player: Player, requiredSuit?: string): NumberCard | null {
+    let candidates = player.numberCards;
+
+    if (requiredSuit) {
+        const suitCards = candidates.filter(c => c.suit === requiredSuit);
+        if (suitCards.length > 0) {
+            candidates = suitCards;
+        }
+        // If no matching suit, use any card (allow_any fallback assumed)
+    }
+
+    if (candidates.length === 0) return null;
+
+    // Sort by value ascending and return lowest
+    candidates.sort((a, b) => a.value - b.value);
+    return candidates[0];
+}
+
+/**
+ * Resolve a duel
+ * This is the main duel resolution logic
+ */
+export function resolveDuel(game: GameState, duel: Duel): DuelResult {
+    const player1 = getPlayer(game, duel.player1Id)!;
+    const player2 = getPlayer(game, duel.player2Id)!;
+
+    const action1 = duel.action1!;
+    const action2 = duel.action2!;
+
+    const result: DuelResult = {
+        winnerId: null,
+        loserId: null,
+        infections: [],
+        cures: [],
+        shotgunKills: [],
+        eliminations: [],
+    };
+
+    // Track card consumption
+    let p1CardUsed = false;
+    let p2CardUsed = false;
+
+    // Priority 1: Handle shotguns first
+    if (action1.actionType === 'shotgun') {
+        player1.hasShotgun = false;
+        if (player2.role === 'zombie') {
+            result.shotgunKills.push(player2.id);
+            result.eliminations.push(player2.id);
+            eliminatePlayer(game, player2.id, 'Killed by shotgun');
+            addEvent(game, 'shotgun_fired', 'A shotgun was fired');
+            addEvent(game, 'elimination', 'A player was eliminated');
+        } else {
+            // Wasted on human
+            addEvent(game, 'shotgun_fired', 'A shotgun was fired (wasted)');
+        }
+    }
+
+    if (action2.actionType === 'shotgun') {
+        player2.hasShotgun = false;
+        if (player1.role === 'zombie') {
+            result.shotgunKills.push(player1.id);
+            result.eliminations.push(player1.id);
+            eliminatePlayer(game, player1.id, 'Killed by shotgun');
+            addEvent(game, 'shotgun_fired', 'A shotgun was fired');
+            addEvent(game, 'elimination', 'A player was eliminated');
+        } else {
+            // Wasted on human
+            addEvent(game, 'shotgun_fired', 'A shotgun was fired (wasted)');
+        }
+    }
+
+    // If someone was eliminated by shotgun, duel ends
+    if (result.shotgunKills.length > 0) {
+        duel.status = 'resolved';
+        duel.result = result;
+        return result;
+    }
+
+    // Priority 2: Handle vaccines
+    // Vaccine cancels zombie card played by opponent
+    if (action1.actionType === 'vaccine') {
+        player1.vaccineCard = null;
+        if (action2.actionType === 'zombie' || player2.role === 'zombie') {
+            // Cure player2
+            if (player2.role === 'zombie') {
+                curePlayer(game, player2.id);
+                result.cures.push(player2.id);
+                addEvent(game, 'cure', 'A player was cured');
+            }
+            p1CardUsed = true;
+        }
+    }
+
+    if (action2.actionType === 'vaccine') {
+        player2.vaccineCard = null;
+        if (action1.actionType === 'zombie' || player1.role === 'zombie') {
+            // Cure player1
+            if (player1.role === 'zombie') {
+                curePlayer(game, player1.id);
+                result.cures.push(player1.id);
+                addEvent(game, 'cure', 'A player was cured');
+            }
+            p2CardUsed = true;
+        }
+    }
+
+    // Priority 3: Handle zombie cards (only if not cancelled by vaccine)
+    const p1PlayedZombie = action1.actionType === 'zombie' && !result.cures.includes(player1.id);
+    const p2PlayedZombie = action2.actionType === 'zombie' && !result.cures.includes(player2.id);
+
+    if (p1PlayedZombie && !p2PlayedZombie && action2.actionType !== 'vaccine') {
+        // Player 1's zombie card wins, infect player 2
+        result.winnerId = player1.id;
+        result.loserId = player2.id;
+        infectPlayer(game, player2.id);
+        result.infections.push(player2.id);
+        addEvent(game, 'infection', 'A player was infected');
+
+        // Remove played number card from player 2 if they played one
+        if (action2.actionType === 'number' && action2.cardId) {
+            removeNumberCard(player2, action2.cardId);
+            p2CardUsed = true;
+        }
+    } else if (p2PlayedZombie && !p1PlayedZombie && action1.actionType !== 'vaccine') {
+        // Player 2's zombie card wins, infect player 1
+        result.winnerId = player2.id;
+        result.loserId = player1.id;
+        infectPlayer(game, player1.id);
+        result.infections.push(player1.id);
+        addEvent(game, 'infection', 'A player was infected');
+
+        // Remove played number card from player 1 if they played one
+        if (action1.actionType === 'number' && action1.cardId) {
+            removeNumberCard(player1, action1.cardId);
+            p1CardUsed = true;
+        }
+    } else if (action1.actionType === 'number' && action2.actionType === 'number') {
+        // Priority 4: Number vs Number
+        const card1 = player1.numberCards.find(c => c.id === action1.cardId);
+        const card2 = player2.numberCards.find(c => c.id === action2.cardId);
+
+        if (card1 && card2) {
+            // Remove played cards
+            removeNumberCard(player1, card1.id);
+            removeNumberCard(player2, card2.id);
+            p1CardUsed = true;
+            p2CardUsed = true;
+
+            if (card1.value > card2.value) {
+                result.winnerId = player1.id;
+                result.loserId = player2.id;
+                // Winner steals a card from loser
+                const stolenCard = getRandomStealableCard(player2.numberCards, CONFIG.STEAL_MODE);
+                if (stolenCard) {
+                    removeNumberCard(player2, stolenCard.id);
+                    player1.numberCards.push(stolenCard);
+                    result.stolenCardId = stolenCard.id;
+                }
+            } else if (card2.value > card1.value) {
+                result.winnerId = player2.id;
+                result.loserId = player1.id;
+                // Winner steals a card from loser
+                const stolenCard = getRandomStealableCard(player1.numberCards, CONFIG.STEAL_MODE);
+                if (stolenCard) {
+                    removeNumberCard(player1, stolenCard.id);
+                    player2.numberCards.push(stolenCard);
+                    result.stolenCardId = stolenCard.id;
+                }
+            }
+            // Draw: no steal
+        }
+    }
+
+    // Check for elimination (0 number cards)
+    if (player1.numberCards.length === 0 && player1.status === 'alive') {
+        eliminatePlayer(game, player1.id, 'Ran out of cards');
+        result.eliminations.push(player1.id);
+        if (CONFIG.SHOW_ELIMINATION_COUNT) {
+            addEvent(game, 'elimination', 'A player was eliminated');
+        }
+    }
+
+    if (player2.numberCards.length === 0 && player2.status === 'alive') {
+        eliminatePlayer(game, player2.id, 'Ran out of cards');
+        result.eliminations.push(player2.id);
+        if (CONFIG.SHOW_ELIMINATION_COUNT) {
+            addEvent(game, 'elimination', 'A player was eliminated');
+        }
+    }
+
+    duel.status = 'resolved';
+    duel.result = result;
+
+    return result;
+}
+
+/**
+ * Helper to remove a number card from player's hand
+ */
+function removeNumberCard(player: Player, cardId: string): void {
+    const index = player.numberCards.findIndex(c => c.id === cardId);
+    if (index !== -1) {
+        player.numberCards.splice(index, 1);
+    }
+}
+
+/**
+ * Get duel result from perspective of a specific player
+ */
+export function getDuelResultPrivate(
+    game: GameState,
+    duel: Duel,
+    playerId: string
+): DuelResultPrivate | null {
+    if (!duel.result) return null;
+
+    const player = getPlayer(game, playerId);
+    const opponentId = duel.player1Id === playerId ? duel.player2Id : duel.player1Id;
+
+    if (!player) return null;
+
+    const result = duel.result;
+    const action = duel.player1Id === playerId ? duel.action1 : duel.action2;
+
+    let outcome: 'win' | 'lose' | 'draw';
+    if (result.winnerId === playerId) {
+        outcome = 'win';
+    } else if (result.loserId === playerId) {
+        outcome = 'lose';
+    } else {
+        outcome = 'draw';
+    }
+
+    // Determine stolen/lost cards
+    let cardStolen = undefined;
+    let cardLost = undefined;
+
+    if (result.stolenCardId) {
+        if (result.winnerId === playerId) {
+            // This player stole a card
+            cardStolen = player.numberCards.find(c => c.id === result.stolenCardId);
+        } else if (result.loserId === playerId) {
+            // This player lost a card (we can't show which one was stolen since it's removed)
+            cardLost = undefined; // Card was removed, can't reference it
+        }
+    }
+
+    return {
+        outcome,
+        cardStolen,
+        cardLost,
+        infected: result.infections.includes(playerId),
+        cured: result.cures.includes(playerId),
+        shotgunUsed: action?.actionType === 'shotgun',
+        shotgunResult: action?.actionType === 'shotgun'
+            ? (result.shotgunKills.includes(opponentId) ? 'killed_zombie' : 'wasted_on_human')
+            : undefined,
+        opponentEliminated: result.eliminations.includes(opponentId),
+        youEliminated: result.eliminations.includes(playerId),
+    };
+}
+
+/**
+ * Get available actions for a player in a duel
+ */
+export function getAvailableActions(player: Player, duel: Duel): ActionType[] {
+    const actions: ActionType[] = [];
+
+    // Number cards (check suit rule)
+    const validNumberCards = getValidNumberCards(player, duel);
+    if (validNumberCards.length > 0) {
+        actions.push('number');
+    }
+
+    if (player.zombieCard) actions.push('zombie');
+    if (player.vaccineCard) actions.push('vaccine');
+    if (player.hasShotgun) actions.push('shotgun');
+
+    return actions;
+}
+
+/**
+ * Get valid number cards for current duel state
+ */
+export function getValidNumberCards(player: Player, duel: Duel): NumberCard[] {
+    if (!duel.requiredSuit) {
+        // No suit set yet, all cards valid
+        return player.numberCards;
+    }
+
+    const suitCards = player.numberCards.filter(c => c.suit === duel.requiredSuit);
+    if (suitCards.length > 0) {
+        return suitCards;
+    }
+
+    // No matching suit - depends on fallback mode
+    if (CONFIG.NO_SUIT_FALLBACK === 'allow_any') {
+        return player.numberCards;
+    }
+
+    return []; // auto_lose mode and no matching suit
+}

@@ -1,0 +1,227 @@
+/**
+ * Zombie Hunt - Game Type Definitions
+ * All types for game state, cards, players, and duels.
+ */
+
+// ============ Card Types ============
+
+export type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
+
+export interface NumberCard {
+    id: string;
+    type: 'number';
+    suit: Suit;
+    value: number;
+}
+
+export interface ZombieCard {
+    id: string;
+    type: 'zombie';
+}
+
+export interface VaccineCard {
+    id: string;
+    type: 'vaccine';
+}
+
+export interface ShotgunCard {
+    id: string;
+    type: 'shotgun';
+}
+
+export type Card = NumberCard | ZombieCard | VaccineCard | ShotgunCard;
+export type SpecialCard = ZombieCard | VaccineCard | ShotgunCard;
+
+// ============ Player Types ============
+
+export type Role = 'human' | 'zombie';
+export type PlayerStatus = 'alive' | 'eliminated';
+
+export interface Player {
+    id: string;
+    name: string;
+    socketId: string | null;
+    teamId: number;
+    role: Role;
+    status: PlayerStatus;
+
+    // Cards
+    numberCards: NumberCard[];
+    zombieCard: ZombieCard | null;
+    vaccineCard: VaccineCard | null;
+    hasShotgun: boolean;
+
+    // Lobby state
+    selectedOpponentId: string | null;
+    isPaired: boolean;
+    currentDuelId: string | null;
+
+    // Tracking
+    eliminationReason?: string;
+    disconnectedAt?: number;
+}
+
+// ============ Duel Types ============
+
+export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun';
+
+export interface DuelAction {
+    playerId: string;
+    actionType: ActionType;
+    cardId?: string; // For number/vaccine/zombie cards
+    timestamp: number;
+}
+
+export interface DuelResult {
+    winnerId: string | null; // null = draw
+    loserId: string | null;
+    stolenCardId?: string;
+    infections: string[]; // playerIds who got infected
+    cures: string[]; // playerIds who got cured
+    shotgunKills: string[]; // playerIds killed by shotgun
+    eliminations: string[]; // playerIds eliminated (out of cards or shotgunned)
+}
+
+export type DuelStatus = 'pending' | 'in_progress' | 'resolved';
+
+export interface Duel {
+    id: string;
+    round: number;
+    player1Id: string;
+    player2Id: string;
+    status: DuelStatus;
+    requiredSuit?: Suit; // Set by first number card played
+    action1?: DuelAction;
+    action2?: DuelAction;
+    result?: DuelResult;
+}
+
+// ============ Game Phase Types ============
+
+export type GamePhase = 'waiting' | 'lobby' | 'duel' | 'meeting' | 'ended';
+
+export interface PublicEvent {
+    id: string;
+    round: number;
+    type: 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end';
+    message: string; // Anonymized message
+}
+
+// ============ Game State ============
+
+export interface GameState {
+    gameCode: string;
+    phase: GamePhase;
+    round: number;
+    phaseEndsAt?: number; // Unix timestamp
+
+    players: Map<string, Player>;
+    duels: Map<string, Duel>;
+    currentRoundDuels: string[]; // Duel IDs for current round
+
+    events: PublicEvent[];
+
+    // Tracking
+    createdAt: number;
+    startedAt?: number;
+    endedAt?: number;
+}
+
+// ============ Public/Private State Views ============
+
+export interface PlayerPublic {
+    id: string;
+    name: string;
+    isAlive: boolean;
+    isPaired: boolean;
+    isConnected: boolean;
+    numberCardCount: number;
+}
+
+export interface PlayerPrivate {
+    id: string;
+    name: string;
+    role: Role;
+    status: PlayerStatus;
+    teamId: number;
+    numberCards: NumberCard[];
+    zombieCard: ZombieCard | null;
+    vaccineCard: VaccineCard | null;
+    hasShotgun: boolean;
+    currentDuelId: string | null;
+    eliminationReason?: string;
+}
+
+export interface DuelPublic {
+    id: string;
+    player1Name: string;
+    player2Name: string;
+    status: DuelStatus;
+}
+
+export interface DuelResultPrivate {
+    outcome: 'win' | 'lose' | 'draw';
+    cardStolen?: Card;
+    cardLost?: Card;
+    infected: boolean;
+    cured: boolean;
+    shotgunUsed: boolean;
+    shotgunResult?: 'killed_zombie' | 'wasted_on_human';
+    opponentEliminated: boolean;
+    youEliminated: boolean;
+}
+
+export interface GameStatePublic {
+    gameCode: string;
+    phase: GamePhase;
+    round: number;
+    phaseEndsAt?: number;
+    playerCount: number;
+    alivePlayerCount: number;
+}
+
+// ============ Host-Only State ============
+
+export interface HostState {
+    gameCode: string;
+    phase: GamePhase;
+    round: number;
+    phaseEndsAt?: number;
+
+    players: Array<{
+        id: string;
+        name: string;
+        role: Role;
+        teamId: number;
+        status: PlayerStatus;
+        isConnected: boolean;
+        numberCardCount: number;
+        hasZombieCard: boolean;
+        hasVaccine: boolean;
+        hasShotgun: boolean;
+    }>;
+
+    duels: DuelPublic[];
+
+    // Hidden totals (visible only to host)
+    humanCount: number;
+    zombieCount: number;
+    teamBreakdown: Array<{
+        teamId: number;
+        humans: number;
+        zombies: number;
+        alive: number;
+    }>;
+
+    events: PublicEvent[];
+}
+
+// ============ Final Reveal ============
+
+export interface FinalReveal {
+    humans: Array<{ id: string; name: string; teamId: number }>;
+    zombies: Array<{ id: string; name: string; teamId: number }>;
+    winnerSide: 'humans' | 'zombies' | 'tie';
+    humanCount: number;
+    zombieCount: number;
+}

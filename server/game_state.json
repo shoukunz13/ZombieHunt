@@ -1,0 +1,29 @@
+{
+  "gameCode": "ZOMBIE",
+  "phase": "waiting",
+  "round": 0,
+  "players": [
+    [
+      "34ccfa0a-5aa5-4e5b-8019-531f54d2bec9",
+      {
+        "id": "34ccfa0a-5aa5-4e5b-8019-531f54d2bec9",
+        "name": "hadi",
+        "socketId": "uWNlHYlc_DrjWb9iAAAF",
+        "teamId": 0,
+        "role": "human",
+        "status": "alive",
+        "numberCards": [],
+        "zombieCard": null,
+        "vaccineCard": null,
+        "hasShotgun": true,
+        "selectedOpponentId": null,
+        "isPaired": false,
+        "currentDuelId": null
+      }
+    ]
+  ],
+  "duels": [],
+  "currentRoundDuels": [],
+  "events": [],
+  "createdAt": 1768012598155
+}

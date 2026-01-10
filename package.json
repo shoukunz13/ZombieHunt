@@ -1,0 +1,19 @@
+{
+    "name": "zombie-hunt",
+    "version": "1.0.0",
+    "description": "Zombie Hunt - IRL Deception Game inspired by Alice in Borderland",
+    "private": true,
+    "scripts": {
+        "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+        "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+        "dev:server": "cd server && npm run dev",
+        "dev:client": "cd client && npm run dev",
+        "build": "cd server && npm run build && cd ../client && npm run build",
+        "start": "cd server && npm start",
+        "test": "cd server && npm test",
+        "simulate": "cd server && npm run simulate"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}
