@@ -13,11 +13,12 @@ import { useHost, HostProvider } from '../context/HostContext';
 import { ConnectionStatus, EventItem, DisplayTitle, SystemMessage } from '../components/shared';
 import { IntroVideo } from '../components/IntroVideo';
 
+
 function HostDashboardContent() {
     const {
         isConnected, isAuthenticated, hostState, events, authError,
         currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer, endGame,
-        completeIntro
+        completeIntro, updateSettings
     } = useHost();
 
     const [pin, setPin] = useState('');
@@ -175,7 +176,7 @@ function HostDashboardContent() {
                                     <div className="stat-label">PHASE</div>
                                 </div>
                                 <div className="stat-box">
-                                    <div className="stat-value">{hostState.round}/20</div>
+                                    <div className="stat-value">{hostState.round}/{hostState.settings?.maxRounds || 20}</div>
                                     <div className="stat-label">ROUND</div>
                                 </div>
                                 <div className="stat-box">
@@ -204,6 +205,41 @@ function HostDashboardContent() {
                         </div>
                     )}
                 </div>
+
+                {/* Settings - Only during waiting phase */}
+                {hostState && hostState.phase === 'waiting' && hostState.settings && (
+                    <div className="host-section">
+                        <h3>GAME SETTINGS</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                            <div>
+                                <label className="text-system" style={{ display: 'block', marginBottom: 'var(--space-xs)' }}>
+                                    MAX ROUNDS: {hostState.settings.maxRounds}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="5"
+                                    max="20"
+                                    value={hostState.settings.maxRounds}
+                                    onChange={(e) => updateSettings({ maxRounds: parseInt(e.target.value) })}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-system" style={{ display: 'block', marginBottom: 'var(--space-xs)' }}>
+                                    ZOMBIES PER TEAM: {hostState.settings.zombiesPerTeam}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="1"
+                                    max="4"
+                                    value={hostState.settings.zombiesPerTeam}
+                                    onChange={(e) => updateSettings({ zombiesPerTeam: parseInt(e.target.value) })}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Controls */}
                 <div className="host-section">

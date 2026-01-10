@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
     GameState, Player, Duel, GamePhase, PublicEvent,
     PlayerPublic, PlayerPrivate, GameStatePublic, HostState,
-    FinalReveal, Role, NumberCard
+    FinalReveal, Role, NumberCard, GameSettings, DEFAULT_SETTINGS
 } from './types';
 import { CONFIG } from './config';
 import {
@@ -27,6 +27,7 @@ export function createGame(gameCode: string): GameState {
         gameCode,
         phase: 'waiting',
         round: 0,
+        settings: { ...DEFAULT_SETTINGS },
         players: new Map(),
         duels: new Map(),
         currentRoundDuels: [],
@@ -52,6 +53,23 @@ export function resetGame(gameCode: string): GameState {
  */
 export function clearGame(): void {
     currentGame = null;
+}
+
+/**
+ * Update game settings (host only, during waiting phase)
+ */
+export function updateSettings(game: GameState, settings: Partial<GameSettings>): boolean {
+    if (game.phase !== 'waiting') return false;
+
+    if (settings.maxRounds !== undefined) {
+        game.settings.maxRounds = Math.min(20, Math.max(5, settings.maxRounds));
+    }
+    if (settings.zombiesPerTeam !== undefined) {
+        game.settings.zombiesPerTeam = Math.min(4, Math.max(1, settings.zombiesPerTeam));
+    }
+
+    saveGame(game);
+    return true;
 }
 
 /**
@@ -197,12 +215,18 @@ export function startGame(game: GameState): boolean {
         teams.push(team);
     }
 
-    // Assign ONE zombie per team
+    // Assign zombies per team based on settings
+    const zombiesPerTeam = game.settings.zombiesPerTeam;
     for (const team of teams) {
         if (team.length > 0) {
-            const zombieIndex = Math.floor(Math.random() * team.length);
-            team[zombieIndex].role = 'zombie';
-            team[zombieIndex].zombieCard = createZombieCard();
+            // Shuffle team to randomize zombie selection
+            const shuffledTeam = shuffleArray([...team]);
+            const zombieCount = Math.min(zombiesPerTeam, team.length - 1); // At least 1 human per team
+
+            for (let z = 0; z < zombieCount; z++) {
+                shuffledTeam[z].role = 'zombie';
+                shuffledTeam[z].zombieCard = createZombieCard();
+            }
         }
     }
 
@@ -458,7 +482,7 @@ export function startMeetingPhase(game: GameState): void {
 export function startNextRound(game: GameState): void {
     if (game.phase !== 'meeting') return;
 
-    if (game.round >= CONFIG.ROUNDS) {
+    if (game.round >= game.settings.maxRounds) {
         endGame(game);
         return;
     }
@@ -590,6 +614,7 @@ export function getGameStatePublic(game: GameState): GameStatePublic {
         gameCode: game.gameCode,
         phase: game.phase,
         round: game.round,
+        maxRounds: game.settings.maxRounds,
         phaseEndsAt: game.phaseEndsAt,
         playerCount: game.players.size,
         alivePlayerCount: alivePlayers.length,
@@ -647,6 +672,7 @@ export function getHostState(game: GameState): HostState {
         humanCount: humans.length,
         zombieCount: zombies.length,
         teamBreakdown,
+        settings: game.settings,
         events: game.events,
     };
 }

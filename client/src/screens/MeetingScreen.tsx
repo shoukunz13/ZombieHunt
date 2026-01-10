@@ -173,7 +173,7 @@ export function MeetingScreen() {
                     textAlign: 'center'
                 }}>
                     <SystemMessage>
-                        {gameState.round < 20
+                        {gameState.round < gameState.maxRounds
                             ? 'NEXT ROUND IMMINENT'
                             : 'FINAL RESULTS INCOMING'}
                     </SystemMessage>

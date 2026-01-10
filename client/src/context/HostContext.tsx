@@ -31,6 +31,7 @@ interface HostContextType {
     kickPlayer: (playerId: string) => void;
     endGame: () => void;
     completeIntro: () => void;
+    updateSettings: (settings: { maxRounds?: number; zombiesPerTeam?: number }) => void;
 }
 
 const HostContext = createContext<HostContextType | null>(null);
@@ -146,6 +147,12 @@ export function HostProvider({ children }: { children: ReactNode }) {
         }
     }, [socket, isAuthenticated]);
 
+    const updateSettings = useCallback((settings: { maxRounds?: number; zombiesPerTeam?: number }) => {
+        if (socket && isAuthenticated) {
+            socket.emit('host_update_settings', settings);
+        }
+    }, [socket, isAuthenticated]);
+
     const value: HostContextType = {
         socket,
         isConnected,
@@ -161,6 +168,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
         kickPlayer,
         endGame,
         completeIntro,
+        updateSettings,
     };
 
     return (

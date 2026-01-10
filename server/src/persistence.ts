@@ -4,7 +4,7 @@
  */
 
 import * as fs from 'fs';
-import { GameState, Player, Duel, PublicEvent } from './types';
+import { GameState, Player, Duel, PublicEvent, GameSettings, DEFAULT_SETTINGS } from './types';
 import { CONFIG } from './config';
 
 interface SerializedGameState {
@@ -12,6 +12,7 @@ interface SerializedGameState {
     phase: string;
     round: number;
     phaseEndsAt?: number;
+    settings?: GameSettings;
     players: Array<[string, Player]>;
     duels: Array<[string, Duel]>;
     currentRoundDuels: string[];
@@ -33,6 +34,7 @@ export function persistState(game: GameState): void {
             phase: game.phase,
             round: game.round,
             phaseEndsAt: game.phaseEndsAt,
+            settings: game.settings,
             players: Array.from(game.players.entries()),
             duels: Array.from(game.duels.entries()),
             currentRoundDuels: game.currentRoundDuels,
@@ -71,6 +73,7 @@ export function loadPersistedState(gameCode: string): GameState | null {
             phase: serialized.phase as GameState['phase'],
             round: serialized.round,
             phaseEndsAt: serialized.phaseEndsAt,
+            settings: serialized.settings || { ...DEFAULT_SETTINGS },
             players: new Map(serialized.players),
             duels: new Map(serialized.duels),
             currentRoundDuels: serialized.currentRoundDuels,

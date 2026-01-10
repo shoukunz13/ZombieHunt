@@ -108,6 +108,18 @@ export interface PublicEvent {
     message: string; // Anonymized message
 }
 
+// ============ Game Settings ============
+
+export interface GameSettings {
+    maxRounds: number;       // 5-20, default 20
+    zombiesPerTeam: number;  // 1-4, default 1
+}
+
+export const DEFAULT_SETTINGS: GameSettings = {
+    maxRounds: 20,
+    zombiesPerTeam: 1,
+};
+
 // ============ Game State ============
 
 export interface GameState {
@@ -115,6 +127,8 @@ export interface GameState {
     phase: GamePhase;
     round: number;
     phaseEndsAt?: number; // Unix timestamp
+
+    settings: GameSettings;
 
     players: Map<string, Player>;
     duels: Map<string, Duel>;
@@ -180,6 +194,7 @@ export interface GameStatePublic {
     gameCode: string;
     phase: GamePhase;
     round: number;
+    maxRounds: number;
     phaseEndsAt?: number;
     playerCount: number;
     alivePlayerCount: number;
@@ -217,6 +232,8 @@ export interface HostState {
         zombies: number;
         alive: number;
     }>;
+
+    settings: GameSettings;
 
     events: PublicEvent[];
 }

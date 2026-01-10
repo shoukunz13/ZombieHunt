@@ -63,6 +63,7 @@ export interface GameStatePublic {
     gameCode: string;
     phase: GamePhase;
     round: number;
+    maxRounds: number;
     phaseEndsAt?: number;
     playerCount: number;
     alivePlayerCount: number;
@@ -140,6 +141,11 @@ export interface GameEndedPayload {
 }
 
 // Host types
+export interface GameSettings {
+    maxRounds: number;
+    zombiesPerTeam: number;
+}
+
 export interface HostState {
     gameCode: string;
     phase: GamePhase;
@@ -171,5 +177,6 @@ export interface HostState {
         zombies: number;
         alive: number;
     }>;
+    settings: GameSettings;
     events: PublicEvent[];
 }

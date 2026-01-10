@@ -10,7 +10,7 @@ import {
     declineInvite, allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
     startNextRound, getPlayer, getPlayerPublic, getPlayerPrivate,
     getGameStatePublic, getHostState, getFinalReveal, getAlivePlayers,
-    getCurrentRoundEvents, resetGame, clearGame, completeIntro
+    getCurrentRoundEvents, resetGame, clearGame, completeIntro, updateSettings
 } from './gameState';
 import {
     submitDuelAction, resolveDuel, isDuelReady, getDuelResultPrivate,
@@ -93,6 +93,10 @@ export function initializeSocketHandlers(io: Server): void {
 
         socket.on('host_intro_complete', () => {
             handleHostIntroComplete(io, socket);
+        });
+
+        socket.on('host_update_settings', (settings: { maxRounds?: number; zombiesPerTeam?: number }) => {
+            handleHostUpdateSettings(io, socket, settings);
         });
 
         // ============ Disconnect ============
@@ -360,6 +364,19 @@ function handleHostIntroComplete(io: Server, socket: Socket): void {
         console.log('Host completed intro video, transitioning to lobby');
         broadcastPhaseChange(io, game);
         broadcastLobbyUpdate(io, game);
+        broadcastHostUpdate(io, game);
+    }
+}
+
+function handleHostUpdateSettings(io: Server, socket: Socket, settings: { maxRounds?: number; zombiesPerTeam?: number }): void {
+    if (socket.id !== hostSocketId) return;
+
+    const game = getGame();
+    if (!game) return;
+
+    const success = updateSettings(game, settings);
+    if (success) {
+        console.log('Host updated settings:', game.settings);
         broadcastHostUpdate(io, game);
     }
 }
