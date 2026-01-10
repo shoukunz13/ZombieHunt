@@ -179,12 +179,12 @@ function HostDashboardContent() {
                                     <div className="stat-label">ROUND</div>
                                 </div>
                                 <div className="stat-box">
-                                    <div className="stat-value">{hostState.humanCount}</div>
+                                    <div className="stat-value">???</div>
                                     <div className="stat-label">SURVIVORS</div>
                                 </div>
                                 <div className="stat-box">
                                     <div className="stat-value" style={{ color: 'var(--accent-red)' }}>
-                                        {hostState.zombieCount}
+                                        ???
                                     </div>
                                     <div className="stat-label">INFECTED</div>
                                 </div>
