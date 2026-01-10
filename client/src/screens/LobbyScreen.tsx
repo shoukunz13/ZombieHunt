@@ -7,12 +7,14 @@
  * - Accept incoming invite to start duel
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import {
     ConnectionStatus, RoleBadge, SystemMessage, SpecialIcons
 } from '../components/shared';
+import { RulebookModal, RulebookButton } from '../components/RulebookModal';
+import { GameStartAlert } from '../components/GameStartAlert';
 
 export function LobbyScreen() {
     const navigate = useNavigate();
@@ -21,6 +23,11 @@ export function LobbyScreen() {
         pairingStatus, selectOpponent, cancelSelection, declineInvite, currentDuel,
         isEliminated
     } = useGame();
+
+    // State for modals/alerts
+    const [showRulebook, setShowRulebook] = useState(false);
+    const [showGameStart, setShowGameStart] = useState(false);
+    const prevPhaseRef = useRef<string | null>(null);
 
     // Handle phase changes
     useEffect(() => {
@@ -52,6 +59,14 @@ export function LobbyScreen() {
             navigate('/eliminated');
         }
     }, [isEliminated, navigate]);
+
+    // Detect game start (transition from 'waiting' to 'lobby')
+    useEffect(() => {
+        if (prevPhaseRef.current === 'waiting' && gameState?.phase === 'lobby') {
+            setShowGameStart(true);
+        }
+        prevPhaseRef.current = gameState?.phase || null;
+    }, [gameState?.phase]);
 
     if (!privateState || !gameState) {
         return (
@@ -300,6 +315,21 @@ export function LobbyScreen() {
                     </div>
                 )}
             </div>
+
+            {/* Rulebook Button & Modal */}
+            <RulebookButton onClick={() => setShowRulebook(true)} />
+            <RulebookModal
+                isOpen={showRulebook}
+                onClose={() => setShowRulebook(false)}
+            />
+
+            {/* Game Start Alert */}
+            {showGameStart && (
+                <GameStartAlert
+                    round={gameState?.round || 1}
+                    onComplete={() => setShowGameStart(false)}
+                />
+            )}
         </div>
     );
 }

@@ -1,167 +1,124 @@
 {
   "gameCode": "NEW",
-  "phase": "meeting",
+  "phase": "lobby",
   "round": 1,
-  "phaseEndsAt": 1768054222251,
   "players": [
     [
-      "d8e18e9d-26ee-4645-a9ab-8a9995d845b5",
+      "53e409e9-e4d3-4fb1-b627-c4fa545dada2",
       {
-        "id": "d8e18e9d-26ee-4645-a9ab-8a9995d845b5",
+        "id": "53e409e9-e4d3-4fb1-b627-c4fa545dada2",
         "name": "HADI",
-        "socketId": "28yB02u8SQQcN7y_AAAO",
+        "socketId": null,
         "teamId": 0,
         "role": "human",
         "status": "alive",
         "numberCards": [
           {
-            "id": "d39fdd1c-172a-4239-99d0-b30555128529",
+            "id": "81b07029-d29b-49a8-b37a-3b4df670b383",
             "type": "number",
-            "suit": "clubs",
-            "value": 11
+            "suit": "hearts",
+            "value": 2
           },
           {
-            "id": "1233587b-a085-41aa-be55-f6d0f982312f",
+            "id": "059ce6a5-c039-4633-9c35-1fffd837b600",
             "type": "number",
             "suit": "clubs",
-            "value": 3
+            "value": 2
           },
           {
-            "id": "690d073d-0d88-45fc-ae38-6e394475835e",
+            "id": "5ad28dfd-4c07-42ba-b6b9-cf1ffe2a7cd2",
             "type": "number",
-            "suit": "spades",
+            "suit": "hearts",
+            "value": 10
+          },
+          {
+            "id": "af021ac7-ba82-43a2-b156-3ec51b3b5ca2",
+            "type": "number",
+            "suit": "diamonds",
+            "value": 6
+          },
+          {
+            "id": "ac96d5a9-6675-4b3d-8c63-7e575c7c0a65",
+            "type": "number",
+            "suit": "diamonds",
+            "value": 8
+          },
+          {
+            "id": "1d6909f5-631e-4cd4-a37e-c90f63902bbd",
+            "type": "number",
+            "suit": "diamonds",
             "value": 7
           },
           {
-            "id": "31330076-3f60-4f0a-a713-5cb0b47cae08",
+            "id": "044c8e82-3c81-4e5c-81dd-ae7f03a24148",
             "type": "number",
-            "suit": "clubs",
-            "value": 4
-          },
-          {
-            "id": "db16a8b5-147b-431d-acaf-8f17f594b96e",
-            "type": "number",
-            "suit": "clubs",
-            "value": 12
-          },
-          {
-            "id": "0016de24-2180-498b-845c-4e9af6607d4f",
-            "type": "number",
-            "suit": "diamonds",
-            "value": 10
+            "suit": "spades",
+            "value": 3
           }
         ],
         "zombieCard": null,
         "vaccineCard": {
-          "id": "ac9c1bc2-149e-490c-98a1-48a47e405990",
+          "id": "974b27e0-5e34-4487-b7a5-2e70fb2e829e",
           "type": "vaccine"
         },
         "hasShotgun": true,
         "selectedOpponentId": null,
         "isPaired": false,
-        "currentDuelId": null
+        "currentDuelId": null,
+        "disconnectedAt": 1768055882562
       }
     ],
     [
-      "d10183b8-4448-4781-8ce2-084ca8c313ef",
+      "a9425557-1bbd-4e27-9215-cf0b459de610",
       {
-        "id": "d10183b8-4448-4781-8ce2-084ca8c313ef",
-        "name": "HAFIZ",
-        "socketId": "NTqtkLQI_JyKyELcAAAQ",
+        "id": "a9425557-1bbd-4e27-9215-cf0b459de610",
+        "name": "AKMAL",
+        "socketId": null,
         "teamId": 0,
         "role": "human",
         "status": "alive",
         "numberCards": [
           {
-            "id": "5576569c-5730-442d-9d8d-e819dee2a624",
+            "id": "fcb5ba0f-f869-4933-b816-ecceb29fee30",
             "type": "number",
-            "suit": "clubs",
-            "value": 6
+            "suit": "hearts",
+            "value": 13
           },
           {
-            "id": "0fad9576-7a7b-4409-ad45-3d7aba698b89",
+            "id": "a638fcdc-2e08-45ad-98a7-76650ae6ff52",
             "type": "number",
             "suit": "diamonds",
-            "value": 7
-          },
-          {
-            "id": "6777b120-92e5-4fe7-9058-15f976373b81",
-            "type": "number",
-            "suit": "hearts",
-            "value": 8
-          },
-          {
-            "id": "e0985f6e-22d0-4009-9754-8d900136f2aa",
-            "type": "number",
-            "suit": "spades",
-            "value": 4
-          },
-          {
-            "id": "e9501afa-ae99-4df7-8638-71f75ccced58",
-            "type": "number",
-            "suit": "hearts",
             "value": 3
-          }
-        ],
-        "zombieCard": null,
-        "vaccineCard": null,
-        "hasShotgun": true,
-        "selectedOpponentId": null,
-        "isPaired": false,
-        "currentDuelId": null
-      }
-    ],
-    [
-      "4bb72212-8e8c-4053-a233-ff4248f23f53",
-      {
-        "id": "4bb72212-8e8c-4053-a233-ff4248f23f53",
-        "name": "AKMAL",
-        "socketId": "a2QTQ35NKxZVg7BkAAAU",
-        "teamId": 0,
-        "role": "human",
-        "status": "alive",
-        "numberCards": [
+          },
           {
-            "id": "538c8bb2-31bb-412a-9745-d81d0d2d0d04",
+            "id": "f783418b-8b43-4ee4-b013-ce4b250a51b8",
             "type": "number",
             "suit": "spades",
             "value": 11
           },
           {
-            "id": "28fa88ac-e99f-469d-bef4-349b30c38b28",
+            "id": "0fa35a25-fe1b-4e33-b944-edff02f6e040",
             "type": "number",
-            "suit": "clubs",
+            "suit": "hearts",
+            "value": 5
+          },
+          {
+            "id": "dada15ac-793c-484a-99aa-d54dd2d1b041",
+            "type": "number",
+            "suit": "diamonds",
             "value": 10
           },
           {
-            "id": "099769d8-0c52-4530-b8cf-e807a1d0f5d1",
-            "type": "number",
-            "suit": "hearts",
-            "value": 12
-          },
-          {
-            "id": "bb6f95d9-240d-4f63-8cee-d1bea607141a",
-            "type": "number",
-            "suit": "spades",
-            "value": 2
-          },
-          {
-            "id": "20a75e2e-f494-44b7-9678-a0ea61182c7d",
-            "type": "number",
-            "suit": "clubs",
-            "value": 5
-          },
-          {
-            "id": "4bcc0f84-6b7e-46de-8dd3-9e681b4874d0",
+            "id": "a2bcb209-a3d4-45e9-9650-dd3fdb247b1c",
             "type": "number",
             "suit": "diamonds",
-            "value": 5
+            "value": 4
           },
           {
-            "id": "d71de8e3-8083-4a27-9d2c-524c8ca4f0d2",
+            "id": "3a8d19cd-dafc-4a2d-9df5-297e9ade11fa",
             "type": "number",
-            "suit": "hearts",
-            "value": 2
+            "suit": "diamonds",
+            "value": 12
           }
         ],
         "zombieCard": null,
@@ -169,158 +126,148 @@
         "hasShotgun": true,
         "selectedOpponentId": null,
         "isPaired": false,
-        "currentDuelId": null
+        "currentDuelId": null,
+        "disconnectedAt": 1768055882536
       }
     ],
     [
-      "f298e807-ee8e-49e9-8e44-4346510bd135",
+      "9608a953-dc37-48f4-9607-1ffd032cb75e",
       {
-        "id": "f298e807-ee8e-49e9-8e44-4346510bd135",
+        "id": "9608a953-dc37-48f4-9607-1ffd032cb75e",
+        "name": "HAFIZ",
+        "socketId": null,
+        "teamId": 0,
+        "role": "human",
+        "status": "alive",
+        "numberCards": [
+          {
+            "id": "3fc7f30f-bf24-4a07-8417-6aeceba436ee",
+            "type": "number",
+            "suit": "hearts",
+            "value": 4
+          },
+          {
+            "id": "698d5164-5086-42a3-8b86-12b9d0130a0a",
+            "type": "number",
+            "suit": "diamonds",
+            "value": 1
+          },
+          {
+            "id": "b007f660-4e02-4693-a888-ad4d384a15ce",
+            "type": "number",
+            "suit": "spades",
+            "value": 1
+          },
+          {
+            "id": "4bf5f530-8826-4933-b501-ea00c83a3f1e",
+            "type": "number",
+            "suit": "spades",
+            "value": 2
+          },
+          {
+            "id": "8ac571a5-3183-4e5a-a496-431dc8056780",
+            "type": "number",
+            "suit": "spades",
+            "value": 12
+          },
+          {
+            "id": "a07e8799-24d0-44f6-924d-bf22dbcc4994",
+            "type": "number",
+            "suit": "clubs",
+            "value": 7
+          },
+          {
+            "id": "d5268d5c-3990-42b4-9c27-3917fe827037",
+            "type": "number",
+            "suit": "spades",
+            "value": 6
+          }
+        ],
+        "zombieCard": null,
+        "vaccineCard": null,
+        "hasShotgun": true,
+        "selectedOpponentId": null,
+        "isPaired": false,
+        "currentDuelId": null,
+        "disconnectedAt": 1768055882605
+      }
+    ],
+    [
+      "22e54291-fac0-47b1-93f3-f61486167ed2",
+      {
+        "id": "22e54291-fac0-47b1-93f3-f61486167ed2",
         "name": "ADNI",
-        "socketId": "JZOMNR1yuXMcTiSuAAAS",
+        "socketId": null,
         "teamId": 0,
         "role": "zombie",
         "status": "alive",
         "numberCards": [
           {
-            "id": "4c10494b-377b-458c-b69a-40e51bff5a4a",
+            "id": "62f70389-ea79-43ff-bf9b-8954e29dab8e",
+            "type": "number",
+            "suit": "clubs",
+            "value": 6
+          },
+          {
+            "id": "0c19ebb1-a8a0-4547-97cb-09dab64fc759",
             "type": "number",
             "suit": "spades",
             "value": 5
           },
           {
-            "id": "7ada1da0-ccc5-4e50-a000-6ef073d3f640",
+            "id": "c294b24a-0c94-46a1-95d3-c1f4ec1a51dd",
             "type": "number",
             "suit": "diamonds",
-            "value": 3
+            "value": 2
           },
           {
-            "id": "860eeece-6593-4b8e-94b6-6ccc1f7a1adc",
-            "type": "number",
-            "suit": "diamonds",
-            "value": 9
-          },
-          {
-            "id": "d09a47eb-fa81-454c-a7e7-9d148eb266d5",
+            "id": "abc2d3db-e4b4-49b6-b6bb-9e16179b9955",
             "type": "number",
             "suit": "hearts",
-            "value": 10
+            "value": 12
           },
           {
-            "id": "13145c3e-d8ed-47fd-a06e-a25fc19b8748",
+            "id": "f4d5767a-9665-45ca-967f-d8c77101ca0d",
             "type": "number",
             "suit": "diamonds",
-            "value": 6
+            "value": 5
+          },
+          {
+            "id": "ba83f817-23fc-4efb-b321-27f119bddcb3",
+            "type": "number",
+            "suit": "spades",
+            "value": 7
+          },
+          {
+            "id": "ea23413d-4c73-4a3a-921c-391e239b8375",
+            "type": "number",
+            "suit": "hearts",
+            "value": 3
           }
         ],
         "zombieCard": {
-          "id": "d618b99b-55d3-4911-a107-3d0d2883bc91",
+          "id": "878483f3-c66b-4876-ba4b-f09068d4e5d7",
           "type": "zombie"
         },
         "vaccineCard": null,
         "hasShotgun": true,
         "selectedOpponentId": null,
         "isPaired": false,
-        "currentDuelId": null
+        "currentDuelId": null,
+        "disconnectedAt": 1768055882518
       }
     ]
   ],
-  "duels": [
-    [
-      "96649d8d-be60-4b08-83c5-a049c059b3e9",
-      {
-        "id": "96649d8d-be60-4b08-83c5-a049c059b3e9",
-        "round": 1,
-        "player1Id": "d8e18e9d-26ee-4645-a9ab-8a9995d845b5",
-        "player2Id": "d10183b8-4448-4781-8ce2-084ca8c313ef",
-        "status": "resolved",
-        "action2": {
-          "playerId": "d10183b8-4448-4781-8ce2-084ca8c313ef",
-          "actionType": "number",
-          "cardId": "e794ba86-5ac6-4aae-b23f-ba8ae796f3dd",
-          "cardIds": [
-            "e794ba86-5ac6-4aae-b23f-ba8ae796f3dd",
-            "ed413c1e-d2cb-4ccc-9805-5cd2439e8eb8"
-          ],
-          "timestamp": 1768054148817
-        },
-        "requiredSuit": "hearts",
-        "action1": {
-          "playerId": "d8e18e9d-26ee-4645-a9ab-8a9995d845b5",
-          "actionType": "number",
-          "cardId": "9ebbf046-ab3b-4c4b-b65c-7483d082346d",
-          "cardIds": [
-            "9ebbf046-ab3b-4c4b-b65c-7483d082346d"
-          ],
-          "timestamp": 1768054149523
-        },
-        "result": {
-          "winnerId": null,
-          "loserId": null,
-          "infections": [],
-          "cures": [],
-          "shotgunKills": [],
-          "eliminations": []
-        }
-      }
-    ],
-    [
-      "84298d97-1400-4616-9be0-279a930bed17",
-      {
-        "id": "84298d97-1400-4616-9be0-279a930bed17",
-        "round": 1,
-        "player1Id": "4bb72212-8e8c-4053-a233-ff4248f23f53",
-        "player2Id": "f298e807-ee8e-49e9-8e44-4346510bd135",
-        "status": "resolved",
-        "action1": {
-          "playerId": "4bb72212-8e8c-4053-a233-ff4248f23f53",
-          "actionType": "number",
-          "cardId": "854a179e-1071-4790-ab79-ea39b5c0fbba",
-          "cardIds": [
-            "854a179e-1071-4790-ab79-ea39b5c0fbba"
-          ],
-          "timestamp": 1768054161184
-        },
-        "requiredSuit": "hearts",
-        "action2": {
-          "playerId": "f298e807-ee8e-49e9-8e44-4346510bd135",
-          "actionType": "number",
-          "cardId": "42ebecd1-4a15-4548-b91e-af3c08d58c78",
-          "cardIds": [
-            "42ebecd1-4a15-4548-b91e-af3c08d58c78"
-          ],
-          "timestamp": 1768054162249
-        },
-        "result": {
-          "winnerId": "4bb72212-8e8c-4053-a233-ff4248f23f53",
-          "loserId": "f298e807-ee8e-49e9-8e44-4346510bd135",
-          "infections": [],
-          "cures": [],
-          "shotgunKills": [],
-          "eliminations": [],
-          "stolenCardId": "d71de8e3-8083-4a27-9d2c-524c8ca4f0d2"
-        }
-      }
-    ]
-  ],
-  "currentRoundDuels": [
-    "96649d8d-be60-4b08-83c5-a049c059b3e9",
-    "84298d97-1400-4616-9be0-279a930bed17"
-  ],
+  "duels": [],
+  "currentRoundDuels": [],
   "events": [
     {
-      "id": "2bc65825-3ffe-4e87-87c3-ad3ed8018ef5",
+      "id": "fb50f38c-df1c-45ad-8e5e-01a5d0823a2b",
       "round": 1,
       "type": "round_start",
       "message": "Round 1 begins"
-    },
-    {
-      "id": "3345a2dd-2eb2-4e55-bb3a-9b9d4b16a155",
-      "round": 1,
-      "type": "round_end",
-      "message": "Round 1 ended"
     }
   ],
-  "createdAt": 1768054115634,
-  "startedAt": 1768054133688
+  "createdAt": 1768055521776,
+  "startedAt": 1768055550360
 }

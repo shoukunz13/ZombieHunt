@@ -1104,3 +1104,135 @@ body {
     transform: translateX(3px);
   }
 }
+
+/* ============================================
+   GAME START ALERT OVERLAY
+   ============================================ */
+.game-start-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #0b0b0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.game-start-overlay.enter {
+  opacity: 0;
+}
+
+.game-start-overlay.show {
+  opacity: 1;
+}
+
+.game-start-overlay.exit {
+  opacity: 0;
+}
+
+.game-start-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(139, 0, 0, 0.3) 0%, transparent 70%);
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.game-start-content {
+  position: relative;
+  text-align: center;
+  z-index: 1;
+}
+
+.game-start-line {
+  width: 200px;
+  height: 2px;
+  background: var(--accent-red);
+  margin: 0 auto;
+  animation: expand-line 0.5s ease-out forwards;
+  transform: scaleX(0);
+}
+
+.game-start-line.top {
+  margin-bottom: var(--space-lg);
+}
+
+.game-start-line.bottom {
+  margin-top: var(--space-lg);
+}
+
+@keyframes expand-line {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.game-start-text {
+  animation: slide-up 0.5s ease-out 0.2s forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+@keyframes slide-up {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.game-start-subtitle {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.3em;
+  color: var(--accent-red);
+  margin-bottom: var(--space-sm);
+}
+
+.game-start-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(3rem, 15vw, 6rem);
+  color: var(--text-primary);
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 40px rgba(139, 0, 0, 0.5);
+}
+
+.game-start-hint {
+  position: absolute;
+  bottom: -80px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.2em;
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}

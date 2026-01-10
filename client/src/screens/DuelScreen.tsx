@@ -15,6 +15,7 @@ import {
     Timer, PlayingCardComponent, SpecialCardComponent,
     RoleBadge, DisplayTitle, SystemMessage, Spinner
 } from '../components/shared';
+import { RulebookModal, RulebookButton } from '../components/RulebookModal';
 import { ActionType, NumberCard } from '../types';
 
 export function DuelScreen() {
@@ -27,6 +28,7 @@ export function DuelScreen() {
     const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
     const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
     const [showResult, setShowResult] = useState(false);
+    const [showRulebook, setShowRulebook] = useState(false);
 
     // Handle phase changes - only navigate away if no longer in a duel
     useEffect(() => {
@@ -411,6 +413,13 @@ export function DuelScreen() {
                         </div>
                     </div>
                 )}
+
+                {/* Rulebook Button & Modal */}
+                <RulebookButton onClick={() => setShowRulebook(true)} />
+                <RulebookModal
+                    isOpen={showRulebook}
+                    onClose={() => setShowRulebook(false)}
+                />
             </div>
         </div>
     );

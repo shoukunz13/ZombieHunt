@@ -7,19 +7,22 @@
  * - No counts or team info
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import {
     Timer, RoleBadge, SpecialIcons, EventItem,
     PlayingCardComponent, DisplayTitle, SystemMessage
 } from '../components/shared';
+import { RulebookModal, RulebookButton } from '../components/RulebookModal';
 
 export function MeetingScreen() {
     const navigate = useNavigate();
     const {
         privateState, gameState, roundEvents, isEliminated
     } = useGame();
+
+    const [showRulebook, setShowRulebook] = useState(false);
 
     // Handle phase changes
     useEffect(() => {
@@ -170,6 +173,13 @@ export function MeetingScreen() {
                     </SystemMessage>
                 </div>
             </div>
+
+            {/* Rulebook Button & Modal */}
+            <RulebookButton onClick={() => setShowRulebook(true)} />
+            <RulebookModal
+                isOpen={showRulebook}
+                onClose={() => setShowRulebook(false)}
+            />
         </div>
     );
 }
