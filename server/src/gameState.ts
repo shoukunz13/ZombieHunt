@@ -690,6 +690,18 @@ export function getFinalReveal(game: GameState): FinalReveal {
     const humans = players.filter(p => p.role === 'human');
     const zombies = players.filter(p => p.role === 'zombie');
 
+    // SPECIAL RULE: If everyone is a zombie, they all die (infection self-destructs)
+    // This prevents strategic mass-conversion
+    if (humans.length === 0 && zombies.length > 0) {
+        return {
+            humans: [],
+            zombies: [],
+            winnerSide: 'tie',
+            humanCount: 0,
+            zombieCount: 0,
+        };
+    }
+
     let winnerSide: 'humans' | 'zombies' | 'tie';
     if (humans.length > zombies.length) {
         winnerSide = 'humans';

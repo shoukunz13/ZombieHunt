@@ -129,18 +129,33 @@ export function RulebookModal({ isOpen, onClose }: RulebookModalProps) {
                             🏆 SURVIVORS WIN IF:
                         </h4>
                         <ul style={{ paddingLeft: 'var(--space-lg)' }}>
+                            <li>More survivors remain than zombies at game end</li>
                             <li>All zombies are eliminated</li>
-                            <li>At least one survivor remains</li>
                         </ul>
                     </div>
-                    <div>
+                    <div className="mb-lg">
                         <h4 style={{ color: 'var(--accent-red)', marginBottom: 'var(--space-sm)' }}>
                             💀 ZOMBIES WIN IF:
                         </h4>
                         <ul style={{ paddingLeft: 'var(--space-lg)' }}>
-                            <li>All survivors on their team are infected or eliminated</li>
-                            <li>The infection spreads to everyone</li>
+                            <li>More zombies remain than survivors at game end</li>
+                            <li>All survivors are eliminated</li>
                         </ul>
+                    </div>
+                    <div style={{
+                        background: 'rgba(255, 100, 100, 0.1)',
+                        border: '1px solid var(--accent-red)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: 'var(--space-md)',
+                        marginTop: 'var(--space-md)'
+                    }}>
+                        <h4 style={{ color: 'var(--accent-red)', marginBottom: 'var(--space-sm)' }}>
+                            ⚠️ MUTUAL DESTRUCTION:
+                        </h4>
+                        <p style={{ fontSize: 'var(--font-size-sm)' }}>
+                            If <strong>everyone becomes a zombie</strong>, the infection self-destructs
+                            and <strong>EVERYONE DIES</strong>. Nobody wins!
+                        </p>
                     </div>
                 </>
             )
