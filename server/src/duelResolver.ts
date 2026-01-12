@@ -231,6 +231,8 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             eliminatePlayer(game, player2.id, 'Killed by shotgun');
             addEvent(game, 'shotgun_fired', 'A shotgun was fired');
             addEvent(game, 'elimination', 'A player was eliminated');
+            // Shooter sits out next round
+            player1.sittingOutRound = game.round + 1;
         } else {
             // Wasted on human
             addEvent(game, 'shotgun_fired', 'A shotgun was fired (wasted)');
@@ -245,6 +247,8 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             eliminatePlayer(game, player1.id, 'Killed by shotgun');
             addEvent(game, 'shotgun_fired', 'A shotgun was fired');
             addEvent(game, 'elimination', 'A player was eliminated');
+            // Shooter sits out next round
+            player2.sittingOutRound = game.round + 1;
         } else {
             // Wasted on human
             addEvent(game, 'shotgun_fired', 'A shotgun was fired (wasted)');
@@ -296,7 +300,7 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
         result.loserId = player2.id;
         infectPlayer(game, player2.id);
         result.infections.push(player2.id);
-        addEvent(game, 'infection', 'A player was infected');
+        // NOTE: Infection events removed to keep infections secret until end-game reveal
 
         // Remove played number cards from player 2 if they played any
         if (action2.actionType === 'number') {
@@ -312,7 +316,7 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
         result.loserId = player1.id;
         infectPlayer(game, player1.id);
         result.infections.push(player1.id);
-        addEvent(game, 'infection', 'A player was infected');
+        // NOTE: Infection events removed to keep infections secret until end-game reveal
 
         // Remove played number cards from player 1 if they played any
         if (action1.actionType === 'number') {

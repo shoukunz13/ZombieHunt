@@ -59,6 +59,7 @@ export interface Player {
     // Tracking
     eliminationReason?: string;
     disconnectedAt?: number;
+    sittingOutRound?: number; // Round number when player must sit out (after successfully shooting zombie)
 }
 
 // ============ Duel Types ============

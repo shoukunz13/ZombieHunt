@@ -10,7 +10,7 @@ import {
     declineInvite, allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
     startNextRound, getPlayer, getPlayerPublic, getPlayerPrivate,
     getGameStatePublic, getHostState, getFinalReveal, getAlivePlayers,
-    getCurrentRoundEvents, resetGame, clearGame, completeIntro, updateSettings
+    getCurrentRoundEvents, resetGame, clearGame, completeIntro, updateSettings, endGame
 } from './gameState';
 import {
     submitDuelAction, resolveDuel, isDuelReady, getDuelResultPrivate,
@@ -618,19 +618,34 @@ function resolveDuelAndNotify(io: Server, game: GameState, duel: Duel): void {
 function checkRoundComplete(io: Server, game: GameState): void {
     const alivePlayers = getAlivePlayers(game);
 
+    // If all players are dead, end the game immediately
+    if (alivePlayers.length === 0) {
+        console.log('[checkRoundComplete] All players dead! Ending game.');
+        endGame(game);
+        broadcastPhaseChange(io, game);
+        broadcastHostUpdate(io, game);
+        return;
+    }
+
     // Count players who have completed duels (isPaired = true AND currentDuelId = null)
     const completedCount = alivePlayers.filter(p => p.isPaired && !p.currentDuelId).length;
 
     // Count players currently in duels
     const inDuelCount = alivePlayers.filter(p => p.currentDuelId !== null).length;
 
-    // If odd number, one player won't duel
-    const expectedDuelers = alivePlayers.length % 2 === 0
-        ? alivePlayers.length
-        : alivePlayers.length - 1;
+    // Count players sitting out this round (after successfully shooting a zombie)
+    const sittingOutCount = alivePlayers.filter(p => p.sittingOutRound === game.round).length;
 
-    console.log(`[checkRoundComplete] alive=${alivePlayers.length}, completed=${completedCount}, inDuel=${inDuelCount}, expected=${expectedDuelers}`);
-    console.log(`[checkRoundComplete] Players:`, alivePlayers.map(p => ({ name: p.name, isPaired: p.isPaired, duelId: p.currentDuelId })));
+    // Eligible duelers = alive players minus those sitting out
+    const eligibleDuelers = alivePlayers.length - sittingOutCount;
+
+    // If odd number of eligible duelers, one player won't duel
+    const expectedDuelers = eligibleDuelers % 2 === 0
+        ? eligibleDuelers
+        : eligibleDuelers - 1;
+
+    console.log(`[checkRoundComplete] alive=${alivePlayers.length}, sittingOut=${sittingOutCount}, completed=${completedCount}, inDuel=${inDuelCount}, expected=${expectedDuelers}`);
+    console.log(`[checkRoundComplete] Players:`, alivePlayers.map(p => ({ name: p.name, isPaired: p.isPaired, duelId: p.currentDuelId, sittingOut: p.sittingOutRound === game.round })));
 
     // All expected duelers have completed, and no one is currently in a duel
     if (completedCount >= expectedDuelers && inDuelCount === 0) {

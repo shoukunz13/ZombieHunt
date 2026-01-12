@@ -12,6 +12,8 @@ import { useState } from 'react';
 import { useHost, HostProvider } from '../context/HostContext';
 import { ConnectionStatus, EventItem, DisplayTitle, SystemMessage } from '../components/shared';
 import { IntroVideo } from '../components/IntroVideo';
+import { EndGameReveal } from '../components/EndGameReveal';
+import { FinalReveal } from '../types';
 
 
 function HostDashboardContent() {
@@ -23,6 +25,26 @@ function HostDashboardContent() {
 
     const [pin, setPin] = useState('');
     const [newGameCode, setNewGameCode] = useState('');
+    const [showReveal, setShowReveal] = useState(true);
+
+    // Create FinalReveal from hostState for end game reveal
+    const getFinalReveal = (): FinalReveal | null => {
+        if (!hostState || hostState.phase !== 'ended') return null;
+
+        const winnerSide: 'humans' | 'zombies' | 'tie' =
+            hostState.humanCount > hostState.zombieCount ? 'humans' :
+                hostState.zombieCount > hostState.humanCount ? 'zombies' : 'tie';
+
+        return {
+            humans: [],
+            zombies: [],
+            winnerSide,
+            humanCount: hostState.humanCount,
+            zombieCount: hostState.zombieCount,
+        };
+    };
+
+    const finalReveal = getFinalReveal();
 
     // Auth screen
     if (!isAuthenticated) {
@@ -93,6 +115,14 @@ function HostDashboardContent() {
             {/* Intro Video - fullscreen overlay */}
             {hostState?.phase === 'intro' && (
                 <IntroVideo onComplete={completeIntro} />
+            )}
+
+            {/* End Game Reveal - fullscreen overlay */}
+            {hostState?.phase === 'ended' && finalReveal && showReveal && (
+                <EndGameReveal
+                    finalReveal={finalReveal}
+                    onComplete={() => setShowReveal(false)}
+                />
             )}
 
             <div className="screen">

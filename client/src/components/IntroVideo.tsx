@@ -6,7 +6,7 @@
  * Video file: /public/videos/intro.mp4
  */
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useCallback } from 'react';
 
 interface IntroVideoProps {
     onComplete: () => void;
@@ -14,13 +14,35 @@ interface IntroVideoProps {
 
 export function IntroVideo({ onComplete }: IntroVideoProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const hasCompletedRef = useRef(false);
     const [isEnded, setIsEnded] = useState(false);
     const [error, setError] = useState(false);
 
-    const handleVideoEnd = () => {
+    // Memoize complete handler to ensure it only fires once
+    const triggerComplete = useCallback(() => {
+        if (hasCompletedRef.current) return;
+        hasCompletedRef.current = true;
         setIsEnded(true);
+        console.log('IntroVideo: Triggering onComplete');
         // Small delay before calling onComplete to let the last frame show
         setTimeout(onComplete, 500);
+    }, [onComplete]);
+
+    const handleVideoEnd = () => {
+        console.log('IntroVideo: onEnded fired');
+        triggerComplete();
+    };
+
+    // Fallback: check if video reached near-end via timeupdate
+    const handleTimeUpdate = () => {
+        const video = videoRef.current;
+        if (video && video.duration > 0) {
+            // If within 0.5 seconds of end, trigger complete
+            if (video.currentTime >= video.duration - 0.5) {
+                console.log('IntroVideo: Near end via timeupdate');
+                triggerComplete();
+            }
+        }
     };
 
     const handleVideoError = () => {
@@ -32,7 +54,7 @@ export function IntroVideo({ onComplete }: IntroVideoProps) {
         if (videoRef.current) {
             videoRef.current.pause();
         }
-        onComplete();
+        triggerComplete();
     };
 
     // If video failed to load, show error and allow skip
@@ -58,6 +80,7 @@ export function IntroVideo({ onComplete }: IntroVideoProps) {
                 autoPlay
                 playsInline
                 onEnded={handleVideoEnd}
+                onTimeUpdate={handleTimeUpdate}
                 onError={handleVideoError}
             >
                 <source src="/videos/intro.mp4" type="video/mp4" />

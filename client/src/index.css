@@ -1421,3 +1421,181 @@ body {
   color: var(--text-muted);
   margin-bottom: var(--space-xl);
 }
+
+/* ============================================
+   END GAME REVEAL
+   ============================================ */
+.end-game-reveal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, #0a0a0a 0%, #1a0a0a 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: var(--space-xl);
+}
+
+.reveal-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 4rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-3xl);
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  text-shadow: 0 0 30px currentColor;
+}
+
+.reveal-title.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.reveal-counters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3xl);
+  margin-bottom: var(--space-3xl);
+}
+
+.reveal-counter {
+  text-align: center;
+  padding: var(--space-xl);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: rgba(0, 0, 0, 0.4);
+  min-width: 180px;
+  transition: all 0.5s ease;
+}
+
+.reveal-counter.winner {
+  border-color: currentColor;
+  box-shadow: 0 0 40px currentColor;
+  transform: scale(1.1);
+}
+
+.reveal-counter.survivor {
+  color: var(--accent-green);
+}
+
+.reveal-counter.infected {
+  color: var(--accent-red);
+}
+
+.counter-value {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 6rem;
+  line-height: 1;
+  margin-bottom: var(--space-sm);
+}
+
+.counter-value.scrambling {
+  animation: counterGlitch 0.1s infinite;
+}
+
+.counter-value.slowing {
+  animation: counterGlitch 0.3s infinite;
+}
+
+@keyframes counterGlitch {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-2px);
+  }
+
+  50% {
+    transform: translateX(2px);
+  }
+
+  75% {
+    transform: translateX(-1px);
+  }
+}
+
+.counter-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+}
+
+.reveal-vs {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2rem;
+  color: var(--text-muted);
+  letter-spacing: 0.2em;
+}
+
+.victory-message {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+  animation: fadeInUp 0.8s ease forwards;
+}
+
+.victory-message.human {
+  color: var(--accent-green);
+}
+
+.victory-message.zombie {
+  color: var(--accent-red);
+}
+
+.victory-message.tie {
+  color: var(--text-muted);
+}
+
+.victory-icon {
+  font-size: 4rem;
+  margin-bottom: var(--space-md);
+  animation: victoryPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes victoryPulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.victory-message p {
+  font-size: var(--font-size-lg);
+  max-width: 400px;
+  margin: 0 auto;
+  opacity: 0.8;
+}
+
+.reveal-subtitle {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.3em;
+  color: var(--text-muted);
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
