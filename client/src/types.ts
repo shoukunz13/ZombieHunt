@@ -143,7 +143,12 @@ export interface GameEndedPayload {
 // Host types
 export interface GameSettings {
     maxRounds: number;
-    zombiesPerTeam: number;
+    zombieCount: number;
+    startingCards: number;
+    vaccineCount: number;
+    shotgunRatio: number;
+    maxInfections: number;
+    annihilationRule: boolean;
 }
 
 export interface HostState {

@@ -294,12 +294,18 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
     const p1PlayedZombie = action1.actionType === 'zombie' && !result.cures.includes(player1.id);
     const p2PlayedZombie = action2.actionType === 'zombie' && !result.cures.includes(player2.id);
 
-    if (p1PlayedZombie && !p2PlayedZombie && action2.actionType !== 'vaccine') {
+    // Check if zombie has reached their personal infection limit (0 = unlimited)
+    const maxInfections = game.settings.maxInfections;
+    const p1CanInfect = maxInfections === 0 || player1.infectionCount < maxInfections;
+    const p2CanInfect = maxInfections === 0 || player2.infectionCount < maxInfections;
+
+    if (p1PlayedZombie && !p2PlayedZombie && action2.actionType !== 'vaccine' && p1CanInfect) {
         // Player 1's zombie card wins, infect player 2
         result.winnerId = player1.id;
         result.loserId = player2.id;
         infectPlayer(game, player2.id);
         result.infections.push(player2.id);
+        player1.infectionCount++; // Track this zombie's infection count
         // NOTE: Infection events removed to keep infections secret until end-game reveal
 
         // Remove played number cards from player 2 if they played any
@@ -310,12 +316,13 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             }
             p2CardUsed = true;
         }
-    } else if (p2PlayedZombie && !p1PlayedZombie && action1.actionType !== 'vaccine') {
+    } else if (p2PlayedZombie && !p1PlayedZombie && action1.actionType !== 'vaccine' && p2CanInfect) {
         // Player 2's zombie card wins, infect player 1
         result.winnerId = player2.id;
         result.loserId = player1.id;
         infectPlayer(game, player1.id);
         result.infections.push(player1.id);
+        player2.infectionCount++; // Track this zombie's infection count
         // NOTE: Infection events removed to keep infections secret until end-game reveal
 
         // Remove played number cards from player 1 if they played any

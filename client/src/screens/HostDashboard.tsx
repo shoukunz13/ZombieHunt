@@ -27,6 +27,15 @@ function HostDashboardContent() {
     const [newGameCode, setNewGameCode] = useState('');
     const [showReveal, setShowReveal] = useState(true);
 
+    // Helper to calculate slider background gradient for progress-fill effect
+    const getSliderStyle = (value: number, min: number, max: number): React.CSSProperties => {
+        const percentage = ((value - min) / (max - min)) * 100;
+        return {
+            width: '100%',
+            background: `linear-gradient(to right, #c1121f 0%, #c1121f ${percentage}%, #1a1a1a ${percentage}%, #1a1a1a 100%)`
+        };
+    };
+
     // Create FinalReveal from hostState for end game reveal
     const getFinalReveal = (): FinalReveal | null => {
         if (!hostState || hostState.phase !== 'ended') return null;
@@ -240,7 +249,30 @@ function HostDashboardContent() {
                 {hostState && hostState.phase === 'waiting' && hostState.settings && (
                     <div className="host-section">
                         <h3>GAME SETTINGS</h3>
+
+                        {/* Recommended Settings Button */}
+                        <button
+                            className="btn btn-secondary"
+                            style={{ marginBottom: 'var(--space-md)', width: '100%' }}
+                            onClick={() => {
+                                const count = hostState.players.length;
+                                // Apply recommended settings based on player count
+                                if (count <= 8) {
+                                    updateSettings({ zombieCount: 1, startingCards: 10, vaccineCount: 2, shotgunRatio: 50, maxInfections: 0 });
+                                } else if (count <= 12) {
+                                    updateSettings({ zombieCount: 2, startingCards: 12, vaccineCount: 3, shotgunRatio: 40, maxInfections: 5 });
+                                } else if (count <= 16) {
+                                    updateSettings({ zombieCount: 2, startingCards: 15, vaccineCount: 4, shotgunRatio: 40, maxInfections: 6 });
+                                } else {
+                                    updateSettings({ zombieCount: 2, startingCards: 20, vaccineCount: 5, shotgunRatio: 40, maxInfections: 8 });
+                                }
+                            }}
+                        >
+                            ⚡ APPLY RECOMMENDED ({hostState.players.length} players)
+                        </button>
+
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                            {/* Max Rounds */}
                             <div>
                                 <label className="text-system" style={{ display: 'block', marginBottom: 'var(--space-xs)' }}>
                                     MAX ROUNDS: {hostState.settings.maxRounds}
@@ -251,21 +283,97 @@ function HostDashboardContent() {
                                     max="20"
                                     value={hostState.settings.maxRounds}
                                     onChange={(e) => updateSettings({ maxRounds: parseInt(e.target.value) })}
-                                    style={{ width: '100%' }}
+                                    style={getSliderStyle(hostState.settings.maxRounds, 5, 20)}
                                 />
                             </div>
+
+                            {/* Zombie Count */}
                             <div>
                                 <label className="text-system" style={{ display: 'block', marginBottom: 'var(--space-xs)' }}>
-                                    ZOMBIES PER TEAM: {hostState.settings.zombiesPerTeam}
+                                    STARTING ZOMBIES: {hostState.settings.zombieCount}
                                 </label>
                                 <input
                                     type="range"
                                     min="1"
-                                    max="4"
-                                    value={hostState.settings.zombiesPerTeam}
-                                    onChange={(e) => updateSettings({ zombiesPerTeam: parseInt(e.target.value) })}
-                                    style={{ width: '100%' }}
+                                    max="8"
+                                    value={hostState.settings.zombieCount}
+                                    onChange={(e) => updateSettings({ zombieCount: parseInt(e.target.value) })}
+                                    style={getSliderStyle(hostState.settings.zombieCount, 1, 8)}
                                 />
+                            </div>
+
+                            {/* Starting Cards */}
+                            <div>
+                                <label className="text-system" style={{ display: 'block', marginBottom: 'var(--space-xs)' }}>
+                                    STARTING CARDS: {hostState.settings.startingCards}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="5"
+                                    max="25"
+                                    value={hostState.settings.startingCards}
+                                    onChange={(e) => updateSettings({ startingCards: parseInt(e.target.value) })}
+                                    style={getSliderStyle(hostState.settings.startingCards, 5, 25)}
+                                />
+                            </div>
+
+                            {/* Vaccine Count */}
+                            <div>
+                                <label className="text-system" style={{ display: 'block', marginBottom: 'var(--space-xs)' }}>
+                                    VACCINES: {hostState.settings.vaccineCount}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="10"
+                                    value={hostState.settings.vaccineCount}
+                                    onChange={(e) => updateSettings({ vaccineCount: parseInt(e.target.value) })}
+                                    style={getSliderStyle(hostState.settings.vaccineCount, 0, 10)}
+                                />
+                            </div>
+
+                            {/* Shotgun Ratio */}
+                            <div>
+                                <label className="text-system" style={{ display: 'block', marginBottom: 'var(--space-xs)' }}>
+                                    SHOTGUN %: {hostState.settings.shotgunRatio}%
+                                </label>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    step="10"
+                                    value={hostState.settings.shotgunRatio}
+                                    onChange={(e) => updateSettings({ shotgunRatio: parseInt(e.target.value) })}
+                                    style={getSliderStyle(hostState.settings.shotgunRatio, 0, 100)}
+                                />
+                            </div>
+
+                            {/* Max Infections (per zombie) */}
+                            <div>
+                                <label className="text-system" style={{ display: 'block', marginBottom: 'var(--space-xs)' }}>
+                                    INFECTIONS/ZOMBIE: {hostState.settings.maxInfections === 0 ? 'Unlimited' : hostState.settings.maxInfections}
+                                </label>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="20"
+                                    value={hostState.settings.maxInfections}
+                                    onChange={(e) => updateSettings({ maxInfections: parseInt(e.target.value) })}
+                                    style={getSliderStyle(hostState.settings.maxInfections, 0, 20)}
+                                />
+                            </div>
+
+                            {/* Annihilation Rule Toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                                <input
+                                    type="checkbox"
+                                    id="annihilationRule"
+                                    checked={hostState.settings.annihilationRule}
+                                    onChange={(e) => updateSettings({ annihilationRule: e.target.checked })}
+                                />
+                                <label htmlFor="annihilationRule" className="text-system">
+                                    ANNIHILATION RULE (all zombies = everyone dies)
+                                </label>
                             </div>
                         </div>
                     </div>

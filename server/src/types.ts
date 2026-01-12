@@ -60,6 +60,7 @@ export interface Player {
     eliminationReason?: string;
     disconnectedAt?: number;
     sittingOutRound?: number; // Round number when player must sit out (after successfully shooting zombie)
+    infectionCount: number;   // How many times this zombie has infected others
 }
 
 // ============ Duel Types ============
@@ -112,14 +113,39 @@ export interface PublicEvent {
 // ============ Game Settings ============
 
 export interface GameSettings {
-    maxRounds: number;       // 5-20, default 20
-    zombiesPerTeam: number;  // 1-4, default 1
+    maxRounds: number;           // 5-20, default 20
+    zombieCount: number;         // 1-8, total starting zombies
+    startingCards: number;       // 5-25, number cards per player
+    vaccineCount: number;        // 0-10, total vaccines distributed
+    shotgunRatio: number;        // 0-100, % of players with shotguns
+    maxInfections: number;       // 0-20, max infections per zombie (0 = unlimited)
+    annihilationRule: boolean;   // If all become zombies, everyone dies
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
     maxRounds: 20,
-    zombiesPerTeam: 1,
+    zombieCount: 2,
+    startingCards: 10,
+    vaccineCount: 4,
+    shotgunRatio: 50,
+    maxInfections: 0,
+    annihilationRule: true,
 };
+
+/**
+ * Get recommended settings based on player count
+ */
+export function getRecommendedSettings(playerCount: number): Partial<GameSettings> {
+    if (playerCount <= 8) {
+        return { zombieCount: 1, startingCards: 10, vaccineCount: 2, shotgunRatio: 50, maxInfections: 0 };
+    } else if (playerCount <= 12) {
+        return { zombieCount: 2, startingCards: 12, vaccineCount: 3, shotgunRatio: 40, maxInfections: 5 };
+    } else if (playerCount <= 16) {
+        return { zombieCount: 2, startingCards: 15, vaccineCount: 4, shotgunRatio: 40, maxInfections: 6 };
+    } else {
+        return { zombieCount: 2, startingCards: 20, vaccineCount: 5, shotgunRatio: 40, maxInfections: 8 };
+    }
+}
 
 // ============ Game State ============
 

@@ -12,7 +12,7 @@ import {
 import { CONFIG } from './config';
 import {
     dealNumberCards, createZombieCard, createVaccineCard,
-    distributeVaccines, shuffleArray
+    distributeVaccines, shuffleArray, generateNumberDeck
 } from './cards';
 import { persistState, loadPersistedState } from './persistence';
 
@@ -64,8 +64,23 @@ export function updateSettings(game: GameState, settings: Partial<GameSettings>)
     if (settings.maxRounds !== undefined) {
         game.settings.maxRounds = Math.min(20, Math.max(5, settings.maxRounds));
     }
-    if (settings.zombiesPerTeam !== undefined) {
-        game.settings.zombiesPerTeam = Math.min(4, Math.max(1, settings.zombiesPerTeam));
+    if (settings.zombieCount !== undefined) {
+        game.settings.zombieCount = Math.min(8, Math.max(1, settings.zombieCount));
+    }
+    if (settings.startingCards !== undefined) {
+        game.settings.startingCards = Math.min(25, Math.max(5, settings.startingCards));
+    }
+    if (settings.vaccineCount !== undefined) {
+        game.settings.vaccineCount = Math.min(10, Math.max(0, settings.vaccineCount));
+    }
+    if (settings.shotgunRatio !== undefined) {
+        game.settings.shotgunRatio = Math.min(100, Math.max(0, settings.shotgunRatio));
+    }
+    if (settings.maxInfections !== undefined) {
+        game.settings.maxInfections = Math.min(20, Math.max(0, settings.maxInfections));
+    }
+    if (settings.annihilationRule !== undefined) {
+        game.settings.annihilationRule = settings.annihilationRule;
     }
 
     saveGame(game);
@@ -132,6 +147,7 @@ export function addPlayer(game: GameState, name: string, socketId: string): Play
         selectedOpponentId: null,
         isPaired: false,
         currentDuelId: null,
+        infectionCount: 0, // Track how many times this player (if zombie) has infected
     };
 
     game.players.set(player.id, player);
@@ -184,13 +200,7 @@ export function startGame(game: GameState): boolean {
     const shuffledPlayers = shuffleArray(playerArray);
 
     // Calculate team count based on player count
-    // Target: ~4-5 players per team, 1 zombie per team
-    // Examples:
-    //   4 players  → 1 team  → 1 zombie
-    //   5-8 players → 2 teams → 2 zombies
-    //   9-12 players → 3 teams → 3 zombies
-    //   13-16 players → 4 teams → 4 zombies
-    //   17-20 players → 4 teams → 4 zombies (cap at max teams)
+    // Target: ~4-5 players per team
     const playersPerTeam = 4;
     const maxTeams = CONFIG.TEAM_COUNT;
     const teamCount = Math.min(maxTeams, Math.max(1, Math.ceil(playerCount / playersPerTeam)));
@@ -215,31 +225,39 @@ export function startGame(game: GameState): boolean {
         teams.push(team);
     }
 
-    // Assign zombies per team based on settings
-    const zombiesPerTeam = game.settings.zombiesPerTeam;
-    for (const team of teams) {
-        if (team.length > 0) {
-            // Shuffle team to randomize zombie selection
-            const shuffledTeam = shuffleArray([...team]);
-            const zombieCount = Math.min(zombiesPerTeam, team.length - 1); // At least 1 human per team
-
-            for (let z = 0; z < zombieCount; z++) {
-                shuffledTeam[z].role = 'zombie';
-                shuffledTeam[z].zombieCard = createZombieCard();
-            }
-        }
+    // Assign zombies based on total zombieCount setting (not per team)
+    const totalZombies = Math.min(game.settings.zombieCount, playerCount - 1);
+    const zombieCandidates = shuffleArray([...shuffledPlayers]);
+    for (let z = 0; z < totalZombies; z++) {
+        zombieCandidates[z].role = 'zombie';
+        zombieCandidates[z].zombieCard = createZombieCard();
     }
 
-    // Deal number cards
-    const hands = dealNumberCards(playerCount);
+    // Deal number cards using settings.startingCards
+    const cardsPerPlayer = game.settings.startingCards;
+    const totalCardsNeeded = playerCount * cardsPerPlayer;
+    let deck: NumberCard[] = [];
+    while (deck.length < totalCardsNeeded) {
+        deck = deck.concat(generateNumberDeck());
+    }
+    deck = shuffleArray(deck);
+
     for (let i = 0; i < playerCount; i++) {
-        shuffledPlayers[i].numberCards = hands[i];
+        shuffledPlayers[i].numberCards = deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer);
     }
 
-    // Distribute vaccines
-    const vaccineRecipients = distributeVaccines(playerCount);
+    // Distribute vaccines using settings.vaccineCount
+    const vaccineCount = Math.min(game.settings.vaccineCount, playerCount);
+    const vaccineRecipients = shuffleArray([...Array(playerCount).keys()]).slice(0, vaccineCount);
     for (const idx of vaccineRecipients) {
         shuffledPlayers[idx].vaccineCard = createVaccineCard();
+    }
+
+    // Distribute shotguns using settings.shotgunRatio
+    const shotgunCount = Math.floor(playerCount * (game.settings.shotgunRatio / 100));
+    const shotgunRecipients = shuffleArray([...Array(playerCount).keys()]).slice(0, shotgunCount);
+    for (const idx of shotgunRecipients) {
+        shuffledPlayers[idx].hasShotgun = true;
     }
 
     // Update game state - start with intro phase for video
@@ -690,9 +708,9 @@ export function getFinalReveal(game: GameState): FinalReveal {
     const humans = players.filter(p => p.role === 'human');
     const zombies = players.filter(p => p.role === 'zombie');
 
-    // SPECIAL RULE: If everyone is a zombie, they all die (infection self-destructs)
+    // SPECIAL RULE: If annihilationRule is enabled and everyone is a zombie, they all die
     // This prevents strategic mass-conversion
-    if (humans.length === 0 && zombies.length > 0) {
+    if (game.settings.annihilationRule && humans.length === 0 && zombies.length > 0) {
         return {
             humans: [],
             zombies: [],

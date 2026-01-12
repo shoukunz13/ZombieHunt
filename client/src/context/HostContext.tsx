@@ -5,7 +5,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { HostState, PublicEvent } from '../types';
+import { HostState, PublicEvent, GameSettings } from '../types';
 
 const getServerUrl = (): string => {
     const port = 3001;
@@ -31,7 +31,7 @@ interface HostContextType {
     kickPlayer: (playerId: string) => void;
     endGame: () => void;
     completeIntro: () => void;
-    updateSettings: (settings: { maxRounds?: number; zombiesPerTeam?: number }) => void;
+    updateSettings: (settings: Partial<GameSettings>) => void;
 }
 
 const HostContext = createContext<HostContextType | null>(null);
@@ -147,7 +147,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
         }
     }, [socket, isAuthenticated]);
 
-    const updateSettings = useCallback((settings: { maxRounds?: number; zombiesPerTeam?: number }) => {
+    const updateSettings = useCallback((settings: Partial<GameSettings>) => {
         if (socket && isAuthenticated) {
             socket.emit('host_update_settings', settings);
         }
