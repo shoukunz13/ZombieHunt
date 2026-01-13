@@ -70,6 +70,15 @@ const sanitizedName = name.trim().replace(/[<>"'&]/g, '').substring(0, 16);
 const sanitizedCode = gameCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 ```
 
+**Socket Events:**
+```typescript
+// All socket handlers validate input before processing
+socket.on('join_game', (data: unknown) => {
+    if (!data || typeof data !== 'object') return; // Reject null/invalid
+    // ... validate fields before processing
+});
+```
+
 ### 5. Server-Authoritative Design
 
 The server validates ALL game actions:
