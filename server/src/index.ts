@@ -27,6 +27,37 @@ if (isDevelopment) {
     ALLOWED_ORIGINS.push('*');
 }
 
+// Trust proxy for correct IP detection behind Nginx/Cloudflare
+// Set to 1 for single proxy, or 'loopback' for localhost only
+if (!isDevelopment) {
+    app.set('trust proxy', 1);
+}
+
+// Connection tracking for DoS prevention
+const connectionsPerIP = new Map<string, number>();
+const MAX_CONNECTIONS_PER_IP = 10;
+
+// Metrics tracking
+const metrics = {
+    totalConnections: 0,
+    activeConnections: 0,
+    totalEvents: 0,
+    rateLimitBlocks: 0,
+};
+
+// Normalize IP addresses (handle IPv6 localhost, proxied IPs)
+function normalizeIP(ip: string): string {
+    // Normalize localhost variations
+    if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip === '127.0.0.1') {
+        return 'localhost';
+    }
+    // Remove IPv6 prefix if present
+    if (ip.startsWith('::ffff:')) {
+        return ip.substring(7);
+    }
+    return ip;
+}
+
 // Configure CORS for both Express and Socket.io
 const io = new Server(httpServer, {
     cors: {
@@ -41,6 +72,38 @@ const io = new Server(httpServer, {
         credentials: true,
     },
     maxHttpBufferSize: 1e5, // 100kb max payload
+    connectTimeout: 10000,  // 10 sec connection timeout
+    pingTimeout: 5000,      // 5 sec ping timeout
+    pingInterval: 10000,    // 10 sec ping interval
+});
+
+// Connection limiting middleware
+io.use((socket, next) => {
+    const rawIP = socket.handshake.address;
+    const ip = normalizeIP(rawIP);
+    const currentCount = connectionsPerIP.get(ip) || 0;
+
+    if (currentCount >= MAX_CONNECTIONS_PER_IP) {
+        console.log(`[SECURITY] Connection rejected - IP ${ip} exceeded ${MAX_CONNECTIONS_PER_IP} connections`);
+        next(new Error('Too many connections from this IP'));
+        return;
+    }
+
+    connectionsPerIP.set(ip, currentCount + 1);
+    metrics.totalConnections++;
+    metrics.activeConnections++;
+
+    socket.on('disconnect', () => {
+        const count = connectionsPerIP.get(ip) || 1;
+        if (count <= 1) {
+            connectionsPerIP.delete(ip);
+        } else {
+            connectionsPerIP.set(ip, count - 1);
+        }
+        metrics.activeConnections--;
+    });
+
+    next();
 });
 
 // Security middleware
@@ -67,12 +130,12 @@ app.use(cors({
 app.use(express.json({ limit: '10kb' }));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
 });
 
 // API endpoint to get server info
-app.get('/api/info', (req, res) => {
+app.get('/api/info', (_req, res) => {
     res.json({
         serverTime: Date.now(),
         config: {
@@ -84,8 +147,22 @@ app.get('/api/info', (req, res) => {
     });
 });
 
-// Initialize Socket.io handlers
-initializeSocketHandlers(io);
+// Metrics endpoint (protected in production)
+app.get('/api/metrics', (req, res) => {
+    if (!isDevelopment && req.headers['x-metrics-key'] !== process.env.METRICS_KEY) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+    }
+    res.json({
+        ...metrics,
+        connectionsPerIPCount: connectionsPerIP.size,
+        memoryUsage: process.memoryUsage(),
+        uptime: process.uptime(),
+    });
+});
+
+// Initialize Socket.io handlers with metrics reference
+initializeSocketHandlers(io, metrics);
 
 // Start server
 httpServer.listen(CONFIG.PORT, '0.0.0.0', () => {
@@ -97,6 +174,7 @@ httpServer.listen(CONFIG.PORT, '0.0.0.0', () => {
 ║  Server running on port ${CONFIG.PORT}                          ║
 ║  Host PIN: ${pinDisplay}                                    ║
 ║  Mode: ${isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'}                              ║
+║  Max connections/IP: ${MAX_CONNECTIONS_PER_IP}                              ║
 ║                                                          ║
 ║  For LAN play, connect to:                               ║
 ║  http://<your-local-ip>:${CONFIG.PORT}                          ║
@@ -104,3 +182,5 @@ httpServer.listen(CONFIG.PORT, '0.0.0.0', () => {
   `);
 });
 
+// Export metrics for other modules
+export { metrics };

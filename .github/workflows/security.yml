@@ -1,0 +1,74 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies (server)
+        run: cd server && npm ci
+      
+      - name: Install dependencies (client)
+        run: cd client && npm ci
+      
+      - name: Audit server dependencies
+        run: cd server && npm audit --audit-level=high
+      
+      - name: Audit client dependencies
+        run: cd client && npm audit --audit-level=high
+
+  lint:
+    name: Security Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: cd server && npm ci
+      
+      - name: Run ESLint with security rules
+        run: cd server && npm run lint
+
+  typecheck:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install server dependencies
+        run: cd server && npm ci
+      
+      - name: Install client dependencies
+        run: cd client && npm ci
+      
+      - name: TypeScript check (server)
+        run: cd server && npx tsc --noEmit
+      
+      - name: TypeScript check (client)
+        run: cd client && npx tsc --noEmit

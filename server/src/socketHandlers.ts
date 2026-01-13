@@ -37,20 +37,55 @@ const joinRateLimiter = new RateLimiterMemory({
     duration: 60,    // per minute
 });
 
+// Normalize IP addresses for consistent rate limiting
+function normalizeIP(ip: string): string {
+    if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip === '127.0.0.1') {
+        return 'localhost';
+    }
+    if (ip.startsWith('::ffff:')) {
+        return ip.substring(7);
+    }
+    return ip;
+}
+
 // Store phase timers
 let phaseTimer: NodeJS.Timeout | null = null;
 let hostSocketId: string | null = null;
 
+// Metrics type for observability
+interface Metrics {
+    totalConnections: number;
+    activeConnections: number;
+    totalEvents: number;
+    rateLimitBlocks: number;
+}
+
+// Module-level metrics reference
+let serverMetrics: Metrics | null = null;
+
 /**
  * Initialize Socket.io handlers
  */
-export function initializeSocketHandlers(io: Server): void {
+export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
+    serverMetrics = metrics || null;
+
     io.on('connection', (socket: Socket) => {
-        console.log(`Client connected: ${socket.id}`);
+        console.log(`[CONN] ${socket.id} connected`);
+
 
         // ============ Client Events ============
 
-        socket.on('join_game', ({ gameCode, name }: { gameCode: string; name: string }) => {
+        socket.on('join_game', (data: unknown) => {
+            // Input validation - guard against null/malformed data
+            if (!data || typeof data !== 'object') {
+                socket.emit('error', { message: 'Invalid request' });
+                return;
+            }
+            const { gameCode, name } = data as { gameCode: string; name: string };
+            if (typeof gameCode !== 'string' || typeof name !== 'string') {
+                socket.emit('error', { message: 'Invalid request format' });
+                return;
+            }
             handleJoinGame(io, socket, gameCode, name);
         });
 
@@ -93,7 +128,17 @@ export function initializeSocketHandlers(io: Server): void {
 
         // ============ Host Events ============
 
-        socket.on('host_auth', ({ pin }: { pin: string }) => {
+        socket.on('host_auth', (data: unknown) => {
+            // Input validation
+            if (!data || typeof data !== 'object') {
+                socket.emit('host_auth_failed', { message: 'Invalid request' });
+                return;
+            }
+            const { pin } = data as { pin: string };
+            if (typeof pin !== 'string') {
+                socket.emit('host_auth_failed', { message: 'Invalid request format' });
+                return;
+            }
             handleHostAuth(io, socket, pin);
         });
 
@@ -136,10 +181,14 @@ export function initializeSocketHandlers(io: Server): void {
 // ============ Handler Implementations ============
 
 async function handleJoinGame(io: Server, socket: Socket, gameCode: string, name: string): Promise<void> {
+    const clientIP = normalizeIP(socket.handshake.address);
+
     // Rate limit join attempts
     try {
-        await joinRateLimiter.consume(socket.handshake.address);
+        await joinRateLimiter.consume(clientIP);
     } catch {
+        console.log(`[RATE-LIMIT] join_game blocked for IP ${clientIP}`);
+        if (serverMetrics) serverMetrics.rateLimitBlocks++;
         socket.emit('error', { message: 'Too many join attempts. Please wait.' });
         return;
     }
@@ -396,10 +445,14 @@ function handleDuelAction(
 }
 
 async function handleHostAuth(io: Server, socket: Socket, pin: string): Promise<void> {
+    const clientIP = normalizeIP(socket.handshake.address);
+
     // Rate limit auth attempts to prevent brute-force
     try {
-        await authRateLimiter.consume(socket.handshake.address);
+        await authRateLimiter.consume(clientIP);
     } catch {
+        console.log(`[RATE-LIMIT] host_auth blocked for IP ${clientIP}`);
+        if (serverMetrics) serverMetrics.rateLimitBlocks++;
         socket.emit('host_auth_failed', { message: 'Too many attempts. Please wait 5 minutes.' });
         return;
     }

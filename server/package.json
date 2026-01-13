@@ -8,6 +8,8 @@
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn src/index.ts",
     "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "security-test": "ts-node src/security-test.ts",
     "simulate": "ts-node src/simulator.ts"
   },
   "dependencies": {
@@ -25,6 +27,10 @@
     "@types/jest": "^29.5.5",
     "@types/node": "^20.8.0",
     "@types/uuid": "^9.0.4",
+    "@typescript-eslint/eslint-plugin": "^8.53.0",
+    "@typescript-eslint/parser": "^8.53.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-security": "^3.0.1",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.1",
