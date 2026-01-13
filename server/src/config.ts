@@ -6,7 +6,15 @@
 export const CONFIG = {
     // Server settings
     PORT: parseInt(process.env.PORT || '3001', 10),
-    HOST_PIN: process.env.HOST_PIN || '1234',
+    // In production, require HOST_PIN from environment; in dev allow default
+    HOST_PIN: (() => {
+        const pin = process.env.HOST_PIN;
+        if (process.env.NODE_ENV === 'production' && (!pin || pin.length < 6)) {
+            console.error('ERROR: HOST_PIN must be set to at least 6 characters in production');
+            process.exit(1);
+        }
+        return pin || '1234';
+    })(),
 
     // Game settings
     TEAM_COUNT: 4, // Number of teams (for N=20, this gives 5 per team)

@@ -4,6 +4,7 @@
  */
 
 import { Server, Socket } from 'socket.io';
+import { RateLimiterMemory } from 'rate-limiter-flexible';
 import {
     getOrCreateGame, getGame, addPlayer, findPlayerBySocketId,
     handleDisconnect, handleReconnect, selectOpponent, cancelSelection,
@@ -18,6 +19,23 @@ import {
 } from './duelResolver';
 import { CONFIG } from './config';
 import { GameState, Player, Duel, PlayerPublic } from './types';
+
+// Rate limiters
+const eventRateLimiter = new RateLimiterMemory({
+    points: 20,      // 20 events
+    duration: 1,     // per 1 second
+});
+
+const authRateLimiter = new RateLimiterMemory({
+    points: 5,       // 5 auth attempts
+    duration: 60,    // per minute
+    blockDuration: 300, // 5 min block after exceeded
+});
+
+const joinRateLimiter = new RateLimiterMemory({
+    points: 10,      // 10 join attempts
+    duration: 60,    // per minute
+});
 
 // Store phase timers
 let phaseTimer: NodeJS.Timeout | null = null;
@@ -117,7 +135,22 @@ export function initializeSocketHandlers(io: Server): void {
 
 // ============ Handler Implementations ============
 
-function handleJoinGame(io: Server, socket: Socket, gameCode: string, name: string): void {
+async function handleJoinGame(io: Server, socket: Socket, gameCode: string, name: string): Promise<void> {
+    // Rate limit join attempts
+    try {
+        await joinRateLimiter.consume(socket.handshake.address);
+    } catch {
+        socket.emit('error', { message: 'Too many join attempts. Please wait.' });
+        return;
+    }
+
+    // Sanitize player name (prevent XSS, limit length)
+    const sanitizedName = name.trim().replace(/[<>"'&]/g, '').substring(0, 16);
+    if (!sanitizedName || sanitizedName.length < 1) {
+        socket.emit('error', { message: 'Invalid name' });
+        return;
+    }
+
     const game = getGame();
 
     // Check if game exists and matches the code
@@ -128,7 +161,7 @@ function handleJoinGame(io: Server, socket: Socket, gameCode: string, name: stri
 
     // Try reconnection first
     if (game.phase !== 'waiting') {
-        const player = handleReconnect(game, name, socket.id);
+        const player = handleReconnect(game, sanitizedName, socket.id);
         if (player) {
             socket.join(gameCode);
             socket.emit('joined', {
@@ -362,7 +395,15 @@ function handleDuelAction(
     broadcastHostUpdate(io, game);
 }
 
-function handleHostAuth(io: Server, socket: Socket, pin: string): void {
+async function handleHostAuth(io: Server, socket: Socket, pin: string): Promise<void> {
+    // Rate limit auth attempts to prevent brute-force
+    try {
+        await authRateLimiter.consume(socket.handshake.address);
+    } catch {
+        socket.emit('host_auth_failed', { message: 'Too many attempts. Please wait 5 minutes.' });
+        return;
+    }
+
     if (pin !== CONFIG.HOST_PIN) {
         socket.emit('host_auth_failed', { message: 'Invalid PIN' });
         return;
