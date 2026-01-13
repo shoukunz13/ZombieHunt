@@ -65,6 +65,14 @@ export function initializeSocketHandlers(io: Server): void {
             socket.emit('pong', { timestamp: Date.now() });
         });
 
+        socket.on('rejoin_game', ({ playerId, gameCode, name }: { playerId: string; gameCode: string; name: string }) => {
+            handleRejoinGame(io, socket, playerId, gameCode, name);
+        });
+
+        socket.on('leave_game', () => {
+            handleLeaveGame(io, socket);
+        });
+
         // ============ Host Events ============
 
         socket.on('host_auth', ({ pin }: { pin: string }) => {
@@ -153,6 +161,77 @@ function handleJoinGame(io: Server, socket: Socket, gameCode: string, name: stri
 
     broadcastLobbyUpdate(io, game);
     broadcastHostUpdate(io, game);
+}
+
+/**
+ * Handle player rejoin from saved session
+ */
+function handleRejoinGame(io: Server, socket: Socket, playerId: string, gameCode: string, name: string): void {
+    const game = getGame();
+
+    // Check if game exists and matches the code
+    if (!game || game.gameCode !== gameCode) {
+        socket.emit('error', { message: 'Game not found' });
+        return;
+    }
+
+    // Find existing player by ID
+    const player = getPlayer(game, playerId);
+    if (player) {
+        // Update socket ID for reconnection
+        player.socketId = socket.id;
+        player.disconnectedAt = undefined;
+
+        socket.join(gameCode);
+        socket.emit('joined', {
+            playerId: player.id,
+            gameStatePublic: getGameStatePublic(game),
+            yourPrivateState: getPlayerPrivate(player),
+        });
+
+        console.log(`Player ${player.name} rejoined from session`);
+        broadcastLobbyUpdate(io, game);
+        broadcastHostUpdate(io, game);
+        return;
+    }
+
+    // If player not found by ID, try to rejoin by name (fallback)
+    const playerByName = handleReconnect(game, name, socket.id);
+    if (playerByName) {
+        socket.join(gameCode);
+        socket.emit('joined', {
+            playerId: playerByName.id,
+            gameStatePublic: getGameStatePublic(game),
+            yourPrivateState: getPlayerPrivate(playerByName),
+        });
+        broadcastLobbyUpdate(io, game);
+        broadcastHostUpdate(io, game);
+        return;
+    }
+
+    socket.emit('error', { message: 'Cannot rejoin - session expired' });
+}
+
+/**
+ * Handle player leaving the game voluntarily
+ */
+function handleLeaveGame(io: Server, socket: Socket): void {
+    const game = getGame();
+    if (!game) return;
+
+    const player = findPlayerBySocketId(game, socket.id);
+    if (!player) return;
+
+    // Only allow leaving during waiting phase
+    if (game.phase === 'waiting') {
+        // Remove player from game
+        game.players.delete(player.id);
+        socket.leave(game.gameCode);
+        console.log(`Player ${player.name} left the game`);
+
+        broadcastLobbyUpdate(io, game);
+        broadcastHostUpdate(io, game);
+    }
 }
 
 function handleSelectOpponent(io: Server, socket: Socket, opponentId: string): void {

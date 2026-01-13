@@ -3,21 +3,21 @@
   "phase": "waiting",
   "round": 0,
   "settings": {
-    "maxRounds": 10,
-    "zombieCount": 1,
+    "maxRounds": 20,
+    "zombieCount": 2,
     "startingCards": 10,
-    "vaccineCount": 2,
+    "vaccineCount": 4,
     "shotgunRatio": 50,
     "maxInfections": 0,
     "annihilationRule": true
   },
   "players": [
     [
-      "ee168218-f11e-49a8-9e9f-ac9e6503919e",
+      "f4d396b6-195d-4aca-b6d1-8cdeb76a842f",
       {
-        "id": "ee168218-f11e-49a8-9e9f-ac9e6503919e",
+        "id": "f4d396b6-195d-4aca-b6d1-8cdeb76a842f",
         "name": "HADI",
-        "socketId": "3ZplydH2MpewQy_fAAAS",
+        "socketId": null,
         "teamId": 0,
         "role": "human",
         "status": "alive",
@@ -28,69 +28,13 @@
         "selectedOpponentId": null,
         "isPaired": false,
         "currentDuelId": null,
-        "infectionCount": 0
-      }
-    ],
-    [
-      "a06d2f4c-0082-40e8-a4af-60ba2106533a",
-      {
-        "id": "a06d2f4c-0082-40e8-a4af-60ba2106533a",
-        "name": "AKMAL",
-        "socketId": "N_LGuRroJlYeFoIBAAAP",
-        "teamId": 0,
-        "role": "human",
-        "status": "alive",
-        "numberCards": [],
-        "zombieCard": null,
-        "vaccineCard": null,
-        "hasShotgun": true,
-        "selectedOpponentId": null,
-        "isPaired": false,
-        "currentDuelId": null,
-        "infectionCount": 0
-      }
-    ],
-    [
-      "c294ac5a-7a66-41ff-939c-d4631d67546f",
-      {
-        "id": "c294ac5a-7a66-41ff-939c-d4631d67546f",
-        "name": "HAFIZ",
-        "socketId": "LM3T7tCt6OPnt1PGAAAD",
-        "teamId": 0,
-        "role": "human",
-        "status": "alive",
-        "numberCards": [],
-        "zombieCard": null,
-        "vaccineCard": null,
-        "hasShotgun": true,
-        "selectedOpponentId": null,
-        "isPaired": false,
-        "currentDuelId": null,
-        "infectionCount": 0
-      }
-    ],
-    [
-      "63bdbc01-e2d1-4146-be4f-cc9041d2ca9e",
-      {
-        "id": "63bdbc01-e2d1-4146-be4f-cc9041d2ca9e",
-        "name": "ADNI",
-        "socketId": "VJclcm-nPydmz7K1AAAM",
-        "teamId": 0,
-        "role": "human",
-        "status": "alive",
-        "numberCards": [],
-        "zombieCard": null,
-        "vaccineCard": null,
-        "hasShotgun": true,
-        "selectedOpponentId": null,
-        "isPaired": false,
-        "currentDuelId": null,
-        "infectionCount": 0
+        "infectionCount": 0,
+        "disconnectedAt": 1768313614058
       }
     ]
   ],
   "duels": [],
   "currentRoundDuels": [],
   "events": [],
-  "createdAt": 1768237044511
+  "createdAt": 1768313584180
 }

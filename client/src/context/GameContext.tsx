@@ -21,6 +21,32 @@ const getServerUrl = (): string => {
     return `http://localhost:${port}`;
 };
 
+// Session storage for reconnection
+const SESSION_KEY = 'zombieHuntSession';
+
+interface GameSession {
+    playerId: string;
+    playerName: string;
+    gameCode: string;
+}
+
+const saveSession = (session: GameSession) => {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+};
+
+const loadSession = (): GameSession | null => {
+    try {
+        const stored = localStorage.getItem(SESSION_KEY);
+        return stored ? JSON.parse(stored) : null;
+    } catch {
+        return null;
+    }
+};
+
+const clearSession = () => {
+    localStorage.removeItem(SESSION_KEY);
+};
+
 interface GameContextType {
     // Connection
     socket: Socket | null;
@@ -68,6 +94,8 @@ interface GameContextType {
     acknowledgeRound: () => void;
     clearError: () => void;
     clearDuel: () => void;
+    leaveGame: () => void;
+    hasSession: boolean;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -105,6 +133,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // Error
     const [error, setError] = useState<string | null>(null);
 
+    // Session state  
+    const [hasSession, setHasSession] = useState<boolean>(() => loadSession() !== null);
+    const [gameCode, setGameCode] = useState<string | null>(null);
+
     // Initialize socket connection
     useEffect(() => {
         const newSocket = io(getServerUrl(), {
@@ -115,6 +147,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
         newSocket.on('connect', () => {
             console.log('Socket connected');
             setIsConnected(true);
+
+            // Try to reconnect from saved session
+            const session = loadSession();
+            if (session) {
+                console.log('Attempting to rejoin from session:', session);
+                newSocket.emit('rejoin_game', {
+                    playerId: session.playerId,
+                    gameCode: session.gameCode,
+                    name: session.playerName,
+                });
+            }
         });
 
         newSocket.on('disconnect', () => {
@@ -131,6 +174,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setPlayerId(data.playerId);
             setGameState(data.gameStatePublic);
             setPrivateState(data.yourPrivateState);
+
+            // Save session for reconnection
+            if (data.playerId && data.gameStatePublic?.gameCode) {
+                const session: GameSession = {
+                    playerId: data.playerId,
+                    playerName: data.yourPrivateState?.name || '',
+                    gameCode: data.gameStatePublic.gameCode,
+                };
+                saveSession(session);
+                setGameCode(data.gameStatePublic.gameCode);
+                setHasSession(true);
+            }
         });
 
         newSocket.on('private_state_update', (data) => {
@@ -274,6 +329,34 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setHasSubmittedAction(false);
     }, []);
 
+    const leaveGame = useCallback(() => {
+        // Clear session from storage
+        clearSession();
+        setHasSession(false);
+
+        // Emit leave event to server
+        if (socket) {
+            socket.emit('leave_game');
+        }
+
+        // Reset all local state
+        setPlayerId(null);
+        setPlayerName(null);
+        setPrivateState(null);
+        setGameState(null);
+        setPlayers([]);
+        setPairingStatus(null);
+        setCurrentDuel(null);
+        setDuelResult(null);
+        setHasSubmittedAction(false);
+        setRoundEvents([]);
+        setFinalReveal(null);
+        setYourOutcome(null);
+        setIsEliminated(false);
+        setEliminationReason(null);
+        setGameCode(null);
+    }, [socket]);
+
     const value: GameContextType = {
         socket,
         isConnected,
@@ -300,6 +383,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         acknowledgeRound,
         clearError,
         clearDuel,
+        leaveGame,
+        hasSession,
     };
 
     return (

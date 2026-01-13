@@ -21,7 +21,7 @@ export function LobbyScreen() {
     const {
         isConnected, privateState, gameState, players, playerId,
         pairingStatus, selectOpponent, cancelSelection, declineInvite, currentDuel,
-        isEliminated
+        isEliminated, leaveGame
     } = useGame();
 
     // State for modals/alerts
@@ -334,6 +334,13 @@ export function LobbyScreen() {
                         <SystemMessage>
                             {players.length} PARTICIPANTS CONNECTED
                         </SystemMessage>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={leaveGame}
+                            style={{ marginTop: 'var(--space-lg)' }}
+                        >
+                            LEAVE GAME
+                        </button>
                     </div>
                 )}
             </div>
