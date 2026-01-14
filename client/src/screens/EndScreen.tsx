@@ -14,7 +14,12 @@ import { DisplayTitle, SystemMessage, Spinner } from '../components/shared';
 
 export function EndScreen() {
     const navigate = useNavigate();
-    const { privateState, finalReveal, yourOutcome, lobbyDestroyed, clearLobbyDestroyed, leaveGame } = useGame();
+    const {
+        privateState, finalReveal, yourOutcome,
+        lobbyDestroyed, clearLobbyDestroyed,
+        lobbyRestarted, clearLobbyRestarted,
+        leaveGame
+    } = useGame();
 
     // Redirect to home if lobby was destroyed
     useEffect(() => {
@@ -23,6 +28,14 @@ export function EndScreen() {
             navigate('/');
         }
     }, [lobbyDestroyed, clearLobbyDestroyed, navigate]);
+
+    // Auto-redirect to lobby when host clicks Play Again
+    useEffect(() => {
+        if (lobbyRestarted) {
+            clearLobbyRestarted();
+            navigate('/lobby');
+        }
+    }, [lobbyRestarted, clearLobbyRestarted, navigate]);
 
     if (!finalReveal) {
         return (
@@ -182,12 +195,19 @@ export function EndScreen() {
 
                 {/* Actions */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                    <button
-                        className="btn btn-primary"
-                        onClick={() => navigate('/lobby')}
-                    >
-                        RETURN TO LOBBY
-                    </button>
+                    {lobbyRestarted ? (
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => {
+                                clearLobbyRestarted();
+                                navigate('/lobby');
+                            }}
+                        >
+                            RETURN TO LOBBY
+                        </button>
+                    ) : (
+                        <SystemMessage>WAITING FOR HOST TO START NEW GAME...</SystemMessage>
+                    )}
                     <button
                         className="btn btn-secondary"
                         onClick={() => {

@@ -40,6 +40,7 @@ interface HostContextType {
     updateSettings: (settings: Partial<GameSettings>) => void;
     clearAnnihilation: () => void;
     revealComplete: () => void;
+    restartGame: () => void;
 }
 
 const HostContext = createContext<HostContextType | null>(null);
@@ -179,6 +180,13 @@ export function HostProvider({ children }: { children: ReactNode }) {
         }
     }, [socket]);
 
+    const restartGame = useCallback(() => {
+        if (socket) {
+            console.log('[HOST] Restarting game (Play Again)');
+            socket.emit('host_restart_game');
+        }
+    }, [socket]);
+
     const value: HostContextType = {
         socket,
         isConnected,
@@ -198,6 +206,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
         updateSettings,
         clearAnnihilation,
         revealComplete,
+        restartGame,
     };
 
     return (

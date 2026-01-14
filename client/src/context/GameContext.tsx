@@ -98,6 +98,8 @@ interface GameContextType {
     hasSession: boolean;
     lobbyDestroyed: boolean;
     clearLobbyDestroyed: () => void;
+    lobbyRestarted: boolean;
+    clearLobbyRestarted: () => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -139,6 +141,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const [hasSession, setHasSession] = useState<boolean>(() => loadSession() !== null);
     const [gameCode, setGameCode] = useState<string | null>(null);
     const [lobbyDestroyed, setLobbyDestroyed] = useState(false);
+    const [lobbyRestarted, setLobbyRestarted] = useState(false);
 
     // Initialize socket connection
     useEffect(() => {
@@ -273,6 +276,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setLobbyDestroyed(true);
         });
 
+        newSocket.on('lobby_restarted', () => {
+            // Host has started a new game - players can now return to lobby
+            console.log('Lobby restarted by host - can return to lobby');
+            setLobbyRestarted(true);
+            // Clear end game state so player can rejoin
+            setFinalReveal(null);
+            setYourOutcome(null);
+        });
+
         setSocket(newSocket);
 
         return () => {
@@ -369,6 +381,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setLobbyDestroyed(false);
     }, []);
 
+    const clearLobbyRestarted = useCallback(() => {
+        setLobbyRestarted(false);
+    }, []);
+
     const value: GameContextType = {
         socket,
         isConnected,
@@ -399,6 +415,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         hasSession,
         lobbyDestroyed,
         clearLobbyDestroyed,
+        lobbyRestarted,
+        clearLobbyRestarted,
     };
 
     return (

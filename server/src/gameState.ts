@@ -56,6 +56,41 @@ export function clearGame(): void {
 }
 
 /**
+ * Restart game to waiting phase (for Play Again, keeps players and settings)
+ */
+export function restartGameToWaiting(game: GameState): boolean {
+    if (!game) return false;
+
+    // Reset game state but keep players and settings
+    game.phase = 'waiting';
+    game.round = 0;
+    game.duels = new Map();
+    game.currentRoundDuels = [];
+    game.events = [];
+
+    // Reset all players to waiting state (clear roles, cards, statuses)
+    for (const player of game.players.values()) {
+        // Note: role will be reassigned when game starts, using 'human' as default
+        (player as any).role = 'human'; // Will be reassigned on game start
+        player.numberCards = [];
+        player.zombieCard = null;
+        player.vaccineCard = null;
+        player.hasShotgun = false;
+        player.status = 'alive';
+        player.selectedOpponentId = null;
+        player.currentDuelId = null;
+        player.isPaired = false;
+        player.sittingOutRound = undefined;
+        player.infectionCount = 0;
+        player.eliminationReason = undefined;
+    }
+
+    saveGame(game);
+    console.log(`[RESTART] Game ${game.gameCode} restarted to waiting phase with ${game.players.size} players`);
+    return true;
+}
+
+/**
  * Update game settings (host only, during waiting phase)
  */
 export function updateSettings(game: GameState, settings: Partial<GameSettings>): boolean {

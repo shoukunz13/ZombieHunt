@@ -20,7 +20,7 @@ function HostDashboardContent() {
     const {
         isConnected, isAuthenticated, hostState, events, authError,
         currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer, endGame,
-        completeIntro, updateSettings, revealComplete
+        completeIntro, updateSettings, revealComplete, restartGame
     } = useHost();
 
     const [pin, setPin] = useState('');
@@ -420,6 +420,13 @@ function HostDashboardContent() {
                             disabled={!hostState || hostState.phase !== 'meeting'}
                         >
                             NEXT ROUND
+                        </button>
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => restartGame()}
+                            disabled={!hostState || hostState.phase !== 'ended'}
+                        >
+                            PLAY AGAIN
                         </button>
                         <button
                             className="btn btn-danger"

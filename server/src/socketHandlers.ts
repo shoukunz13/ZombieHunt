@@ -11,7 +11,8 @@ import {
     declineInvite, allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
     startNextRound, getPlayer, getPlayerPublic, getPlayerPrivate,
     getGameStatePublic, getHostState, getFinalReveal, getAlivePlayers,
-    getCurrentRoundEvents, resetGame, clearGame, completeIntro, updateSettings, endGame
+    getCurrentRoundEvents, resetGame, clearGame, completeIntro, updateSettings, endGame,
+    restartGameToWaiting
 } from './gameState';
 import {
     submitDuelAction, resolveDuel, isDuelReady, getDuelResultPrivate,
@@ -172,6 +173,10 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
 
         socket.on('host_reveal_complete', () => {
             handleHostRevealComplete(io, socket);
+        });
+
+        socket.on('host_restart_game', () => {
+            handleHostRestartGame(io, socket);
         });
 
         // ============ Disconnect ============
@@ -582,6 +587,39 @@ function handleHostRevealComplete(io: Server, socket: Socket): void {
                         ? 'won' : 'lost',
             });
         }
+    }
+}
+
+/**
+ * Host restarts game to waiting phase (Play Again)
+ * Keeps players but resets all game state
+ */
+function handleHostRestartGame(io: Server, socket: Socket): void {
+    if (socket.id !== hostSocketId) return;
+
+    const game = getGame();
+    if (!game) return;
+
+    console.log('[HOST] Restarting game to waiting phase (Play Again)');
+
+    const success = restartGameToWaiting(game);
+    if (success) {
+        // Broadcast phase change to all players (they'll see waiting phase)
+        broadcastPhaseChange(io, game);
+        broadcastLobbyUpdate(io, game);
+        broadcastHostUpdate(io, game);
+
+        // Send special event to players so they know lobby is ready
+        io.to(game.gameCode).emit('lobby_restarted', {
+            message: 'The host has started a new game. Return to the lobby to play again!',
+            gameCode: game.gameCode,
+        });
+
+        // Notify host
+        socket.emit('host_game_restarted', {
+            message: 'Lobby restarted successfully',
+            playerCount: game.players.size,
+        });
     }
 }
 
