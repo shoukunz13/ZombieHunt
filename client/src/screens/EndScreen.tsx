@@ -7,13 +7,22 @@
  * - Winner announcement
  */
 
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { DisplayTitle, SystemMessage, Spinner } from '../components/shared';
 
 export function EndScreen() {
     const navigate = useNavigate();
-    const { privateState, finalReveal, yourOutcome } = useGame();
+    const { privateState, finalReveal, yourOutcome, lobbyDestroyed, clearLobbyDestroyed, leaveGame } = useGame();
+
+    // Redirect to home if lobby was destroyed
+    useEffect(() => {
+        if (lobbyDestroyed) {
+            clearLobbyDestroyed();
+            navigate('/');
+        }
+    }, [lobbyDestroyed, clearLobbyDestroyed, navigate]);
 
     if (!finalReveal) {
         return (
@@ -171,13 +180,24 @@ export function EndScreen() {
                     )}
                 </div>
 
-                {/* Play Again */}
-                <button
-                    className="btn btn-secondary"
-                    onClick={() => navigate('/')}
-                >
-                    RETURN TO START
-                </button>
+                {/* Actions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => navigate('/lobby')}
+                    >
+                        RETURN TO LOBBY
+                    </button>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                            leaveGame();
+                            navigate('/');
+                        }}
+                    >
+                        LEAVE GAME
+                    </button>
+                </div>
             </div>
         </div>
     );

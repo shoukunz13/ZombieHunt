@@ -170,6 +170,10 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
             handleHostUpdateSettings(io, socket, settings);
         });
 
+        socket.on('host_reveal_complete', () => {
+            handleHostRevealComplete(io, socket);
+        });
+
         // ============ Disconnect ============
 
         socket.on('disconnect', () => {
@@ -554,6 +558,33 @@ function handleHostUpdateSettings(io: Server, socket: Socket, settings: { maxRou
     }
 }
 
+/**
+ * Host has completed the reveal animation - now send results to players
+ */
+function handleHostRevealComplete(io: Server, socket: Socket): void {
+    if (socket.id !== hostSocketId) return;
+
+    const game = getGame();
+    if (!game || game.phase !== 'ended') return;
+
+    console.log('[HOST] Reveal complete - sending results to players');
+
+    const finalReveal = getFinalReveal(game);
+
+    // Now send game_ended to all players
+    for (const player of game.players.values()) {
+        if (player.socketId) {
+            io.to(player.socketId).emit('game_ended', {
+                finalReveal,
+                yourOutcome: finalReveal.winnerSide === 'tie' ? 'tie'
+                    : (player.role === 'human' && finalReveal.winnerSide === 'humans') ||
+                        (player.role === 'zombie' && finalReveal.winnerSide === 'zombies')
+                        ? 'won' : 'lost',
+            });
+        }
+    }
+}
+
 function handleHostStartGame(io: Server, socket: Socket): void {
     if (socket.id !== hostSocketId) return;
 
@@ -716,22 +747,10 @@ function broadcastPhaseChange(io: Server, game: GameState): void {
         });
     }
 
-    // If game ended, send final reveal
-    if (game.phase === 'ended') {
-        const finalReveal = getFinalReveal(game);
-
-        for (const player of game.players.values()) {
-            if (player.socketId) {
-                io.to(player.socketId).emit('game_ended', {
-                    finalReveal,
-                    yourOutcome: finalReveal.winnerSide === 'tie' ? 'tie'
-                        : (player.role === 'human' && finalReveal.winnerSide === 'humans') ||
-                            (player.role === 'zombie' && finalReveal.winnerSide === 'zombies')
-                            ? 'won' : 'lost',
-                });
-            }
-        }
-    }
+    // NOTE: If game ended, DON'T send results to players yet.
+    // Host reveal animation plays first, then host emits 'host_reveal_complete' 
+    // which triggers handleHostRevealComplete to send game_ended to players.
+    // This prevents spoilers - players wait while the big screen does the countdown reveal.
 }
 
 function broadcastHostUpdate(io: Server, game: GameState): void {
@@ -781,8 +800,74 @@ function resolveDuelAndNotify(io: Server, game: GameState, duel: Duel): void {
         io.to(player2.socketId!).emit('eliminated', { reason: player2.eliminationReason });
     }
 
+    // CRITICAL: Check for annihilation (all alive players are zombies)
+    if (checkAnnihilation(io, game)) {
+        return; // Game ended due to annihilation, don't continue to round check
+    }
+
     // Check if all duels for this round are complete
     checkRoundComplete(io, game);
+}
+
+/**
+ * Check if all alive players are zombies - triggers immediate game end
+ * This implements the "annihilation rule" where if everyone becomes infected, everyone dies
+ */
+function checkAnnihilation(io: Server, game: GameState): boolean {
+    // Only check if annihilation rule is enabled
+    if (!game.settings.annihilationRule) return false;
+
+    // Only check during active gameplay (not already ended)
+    if (game.phase === 'ended' || game.phase === 'waiting') return false;
+
+    const alivePlayers = getAlivePlayers(game);
+    if (alivePlayers.length === 0) return false;
+
+    const humans = alivePlayers.filter(p => p.role === 'human');
+    const zombies = alivePlayers.filter(p => p.role === 'zombie');
+
+    // If there are still humans alive, no annihilation
+    if (humans.length > 0) return false;
+
+    // All alive players are zombies - trigger annihilation!
+    console.log('[ANNIHILATION] All players are infected! Triggering annihilation sequence.');
+
+    // Add dramatic event
+    game.events.push({
+        id: `annihilation-${game.round}`,
+        round: game.round,
+        type: 'annihilation',
+        message: 'THE INFECTION HAS CONSUMED ALL. EVERYONE PERISHED.',
+    });
+
+    // Step 1: Transition to meeting phase first (calls players together)
+    startMeetingPhase(game);
+    broadcastPhaseChange(io, game);
+    broadcastLobbyUpdate(io, game);
+    broadcastHostUpdate(io, game);
+
+    // Step 2: After 3 seconds in meeting, send cryptic message to host
+    setTimeout(() => {
+        io.to('host').emit('host_annihilation', {
+            message: 'SOMETHING IS WRONG...',
+            zombieCount: zombies.length,
+        });
+
+        // Step 3: After another 3 seconds, end the game
+        setTimeout(() => {
+            endGame(game);
+            broadcastPhaseChange(io, game);
+            broadcastHostUpdate(io, game);
+
+            // Update annihilation message for the final reveal
+            io.to('host').emit('host_annihilation', {
+                message: 'ALL PLAYERS HAVE BEEN INFECTED. EVERYONE DIED.',
+                zombieCount: zombies.length,
+            });
+        }, 3000);
+    }, 3000);
+
+    return true;
 }
 
 /**

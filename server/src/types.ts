@@ -106,7 +106,7 @@ export type GamePhase = 'waiting' | 'intro' | 'lobby' | 'duel' | 'meeting' | 'en
 export interface PublicEvent {
     id: string;
     round: number;
-    type: 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end';
+    type: 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end' | 'annihilation';
     message: string; // Anonymized message
 }
 

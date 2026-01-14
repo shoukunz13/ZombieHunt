@@ -8,7 +8,7 @@
  * - Ceremonial endgame reveal
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useHost, HostProvider } from '../context/HostContext';
 import { ConnectionStatus, EventItem, DisplayTitle, SystemMessage } from '../components/shared';
 import { IntroVideo } from '../components/IntroVideo';
@@ -20,12 +20,19 @@ function HostDashboardContent() {
     const {
         isConnected, isAuthenticated, hostState, events, authError,
         currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer, endGame,
-        completeIntro, updateSettings
+        completeIntro, updateSettings, revealComplete
     } = useHost();
 
     const [pin, setPin] = useState('');
     const [newGameCode, setNewGameCode] = useState('');
     const [showReveal, setShowReveal] = useState(true);
+
+    // Reset showReveal to true when game enters ended phase
+    useEffect(() => {
+        if (hostState?.phase === 'ended') {
+            setShowReveal(true);
+        }
+    }, [hostState?.phase]);
 
     // Helper to calculate slider background gradient for progress-fill effect
     const getSliderStyle = (value: number, min: number, max: number): React.CSSProperties => {
@@ -130,7 +137,10 @@ function HostDashboardContent() {
             {hostState?.phase === 'ended' && finalReveal && showReveal && (
                 <EndGameReveal
                     finalReveal={finalReveal}
-                    onComplete={() => setShowReveal(false)}
+                    onComplete={() => {
+                        revealComplete(); // Tell server to send results to players
+                        setShowReveal(false);
+                    }}
                 />
             )}
 

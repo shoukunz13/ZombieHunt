@@ -15,6 +15,11 @@ const getServerUrl = (): string => {
     return `http://localhost:${port}`;
 };
 
+interface AnnihilationData {
+    message: string;
+    zombieCount: number;
+}
+
 interface HostContextType {
     socket: Socket | null;
     isConnected: boolean;
@@ -23,6 +28,7 @@ interface HostContextType {
     events: PublicEvent[];
     authError: string | null;
     currentGameCode: string | null;
+    annihilationData: AnnihilationData | null;
 
     authenticate: (pin: string) => void;
     createGame: (gameCode: string) => void;
@@ -32,6 +38,8 @@ interface HostContextType {
     endGame: () => void;
     completeIntro: () => void;
     updateSettings: (settings: Partial<GameSettings>) => void;
+    clearAnnihilation: () => void;
+    revealComplete: () => void;
 }
 
 const HostContext = createContext<HostContextType | null>(null);
@@ -44,6 +52,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
     const [events, setEvents] = useState<PublicEvent[]>([]);
     const [authError, setAuthError] = useState<string | null>(null);
     const [currentGameCode, setCurrentGameCode] = useState<string | null>(null);
+    const [annihilationData, setAnnihilationData] = useState<AnnihilationData | null>(null);
 
     useEffect(() => {
         const newSocket = io(getServerUrl(), {
@@ -92,6 +101,12 @@ export function HostProvider({ children }: { children: ReactNode }) {
             setCurrentGameCode(null);
             setHostState(null);
             setEvents([]);
+            setAnnihilationData(null);
+        });
+
+        newSocket.on('host_annihilation', (data: AnnihilationData) => {
+            console.log('[ANNIHILATION] All players infected!', data);
+            setAnnihilationData(data);
         });
 
         newSocket.on('error', (data: { message: string }) => {
@@ -153,6 +168,17 @@ export function HostProvider({ children }: { children: ReactNode }) {
         }
     }, [socket, isAuthenticated]);
 
+    const clearAnnihilation = useCallback(() => {
+        setAnnihilationData(null);
+    }, []);
+
+    const revealComplete = useCallback(() => {
+        if (socket) {
+            console.log('[HOST] Reveal complete - notifying server to send results to players');
+            socket.emit('host_reveal_complete');
+        }
+    }, [socket]);
+
     const value: HostContextType = {
         socket,
         isConnected,
@@ -161,6 +187,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
         events,
         authError,
         currentGameCode,
+        annihilationData,
         authenticate,
         createGame,
         startGame,
@@ -169,6 +196,8 @@ export function HostProvider({ children }: { children: ReactNode }) {
         endGame,
         completeIntro,
         updateSettings,
+        clearAnnihilation,
+        revealComplete,
     };
 
     return (

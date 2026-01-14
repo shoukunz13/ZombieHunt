@@ -96,6 +96,8 @@ interface GameContextType {
     clearDuel: () => void;
     leaveGame: () => void;
     hasSession: boolean;
+    lobbyDestroyed: boolean;
+    clearLobbyDestroyed: () => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -136,6 +138,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     // Session state  
     const [hasSession, setHasSession] = useState<boolean>(() => loadSession() !== null);
     const [gameCode, setGameCode] = useState<string | null>(null);
+    const [lobbyDestroyed, setLobbyDestroyed] = useState(false);
 
     // Initialize socket connection
     useEffect(() => {
@@ -263,6 +266,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setIsEliminated(false);
             setEliminationReason(null);
             setError('Game has been terminated by host');
+
+            // Clear session storage and set redirect flag
+            clearSession();
+            setHasSession(false);
+            setLobbyDestroyed(true);
         });
 
         setSocket(newSocket);
@@ -357,6 +365,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setGameCode(null);
     }, [socket]);
 
+    const clearLobbyDestroyed = useCallback(() => {
+        setLobbyDestroyed(false);
+    }, []);
+
     const value: GameContextType = {
         socket,
         isConnected,
@@ -385,6 +397,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         clearDuel,
         leaveGame,
         hasSession,
+        lobbyDestroyed,
+        clearLobbyDestroyed,
     };
 
     return (
