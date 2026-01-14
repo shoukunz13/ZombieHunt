@@ -636,7 +636,6 @@ export function getPlayerPublic(player: Player, game?: GameState): PlayerPublic 
         isAlive: player.status === 'alive',
         isPaired: player.isPaired,
         isConnected: player.socketId !== null,
-        numberCardCount: player.numberCards.length,
         hasOutgoingInvite: player.selectedOpponentId !== null && !player.isPaired,
         incomingInviteFromId,
         isInDuel: player.currentDuelId !== null,

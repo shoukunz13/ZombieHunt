@@ -23,13 +23,43 @@ export function DuelScreen() {
     const navigate = useNavigate();
     const {
         privateState, gameState, currentDuel, duelResult,
-        hasSubmittedAction, submitAction, isEliminated, clearDuel
+        hasSubmittedAction, submitAction, isEliminated, clearDuel,
+        claimLoot
     } = useGame();
 
     const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
     const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
     const [showResult, setShowResult] = useState(false);
     const [showRulebook, setShowRulebook] = useState(false);
+    const [lootClaimed, setLootClaimed] = useState(false);
+
+    // Reset loot claimed state when new duel starts
+    useEffect(() => {
+        setLootClaimed(false);
+    }, [currentDuel]);
+
+    // ... (existing effects)
+
+    const handleLootClaim = (cardId: string) => {
+        if (!currentDuel) return;
+        claimLoot(currentDuel.duelId, cardId);
+        setLootClaimed(true);
+    };
+
+    // ... (render)
+
+
+
+    {/* Continue Button */ }
+    <button
+        className="btn btn-secondary btn-block"
+        onClick={(e) => {
+            e.stopPropagation();
+            handleCloseResult();
+        }}
+    >
+        CONTINUE
+    </button>
 
     // Handle phase changes - only navigate away if no longer in a duel
     useEffect(() => {
@@ -233,7 +263,7 @@ export function DuelScreen() {
                     <SystemMessage>OPPONENT</SystemMessage>
                     <DisplayTitle size="2xl">{currentDuel.opponent.name}</DisplayTitle>
                     <p className="text-system mt-sm" style={{ color: 'var(--text-muted)' }}>
-                        {currentDuel.opponent.numberCardCount} CARDS REMAINING
+                        Stats Hidden
                     </p>
                 </div>
 
@@ -378,6 +408,28 @@ export function DuelScreen() {
 
                             {/* Additional Details */}
                             <div className="result-details">
+                                {/* Loot Selection */}
+                                {duelResult.lootableCards && duelResult.lootableCards.length > 0 && !lootClaimed && (
+                                    <div className="mt-md mb-md animate-fade-in">
+                                        <p className="result-detail-item success" style={{ justifyContent: 'center', marginBottom: 'var(--space-sm)' }}>
+                                            ★ VICTORY SPOILS: CHOOSE A CARD ★
+                                        </p>
+                                        <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'center' }}>
+                                            {duelResult.lootableCards.map(card => (
+                                                <div key={card.id} onClick={(e) => { e.stopPropagation(); handleLootClaim(card.id); }}>
+                                                    <PlayingCardComponent card={card} size="sm" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {lootClaimed && (
+                                    <p className="result-detail-item success animate-pulse">
+                                        ✓ REWARD CLAIMED
+                                    </p>
+                                )}
+
                                 {duelResult.cardStolen && (
                                     <p className="result-detail-item success">
                                         ► CARD ACQUIRED FROM OPPONENT

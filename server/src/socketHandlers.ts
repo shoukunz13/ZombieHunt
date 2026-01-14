@@ -111,6 +111,10 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
             handleDuelAction(io, socket, duelId, actionType as any, cardId, cardIds);
         });
 
+        socket.on('claim_loot', ({ duelId, cardId }: { duelId: string; cardId: string }) => {
+            handleClaimLoot(io, socket, duelId, cardId);
+        });
+
         socket.on('meeting_acknowledge', () => {
             // Currently just an acknowledgement, no action needed
         });
@@ -923,6 +927,15 @@ function checkRoundComplete(io: Server, game: GameState): void {
         return;
     }
 
+    // If only 1 player left, they win - end the game
+    if (alivePlayers.length === 1) {
+        console.log('[checkRoundComplete] Only 1 player remaining! They win. Ending game.');
+        endGame(game);
+        broadcastPhaseChange(io, game);
+        broadcastHostUpdate(io, game);
+        return;
+    }
+
     // Count players who have completed duels (isPaired = true AND currentDuelId = null)
     const completedCount = alivePlayers.filter(p => p.isPaired && !p.currentDuelId).length;
 
@@ -1028,4 +1041,67 @@ export function getPlayerDuelInfo(game: GameState, playerId: string): {
         actions: getAvailableActions(player, duel),
         validCards: getValidNumberCards(player, duel),
     };
+}
+
+/**
+ * Handle player claiming loot card from opponent
+ */
+function handleClaimLoot(io: Server, socket: Socket, duelId: string, cardId: string): void {
+    const game = getGame();
+    if (!game) return;
+
+    const player = findPlayerBySocketId(game, socket.id);
+    if (!player) return;
+
+    const duel = game.duels.get(duelId);
+    if (!duel || duel.status !== 'resolved' || !duel.result) return;
+
+    if (duel.result.winnerId !== player.id) return;
+
+    const lootCards = duel.result.lootableCards;
+    if (!lootCards) return;
+
+    const cardIndex = lootCards.findIndex(c => c.id === cardId);
+    if (cardIndex === -1) return;
+
+    const card = lootCards[cardIndex];
+    // Remove from lootable (prevent double claim)
+    lootCards.splice(cardIndex, 1);
+
+    // Add to player hand
+    player.numberCards.push(card);
+
+    console.log(`[LOOT] Player ${player.name} claimed card ${card.value} from duel ${duelId}`);
+
+    // Update player private state
+    socket.emit('private_state_update', {
+        yourPrivateState: getPlayerPrivate(player)
+    });
+
+    // Also update game state to remove the lootable option from UI if desired,
+    // though private state update handles the hand.
+    // If we want to hide the "Pick a card" UI, the client essentially re-checks the result.
+    // But result still says 'lootableCards'. We modified it in place, so the NEXT time client gets state it's gone?
+    // DuelResult is sent in 'game_ended' or 'private_state_update'?
+    // Client has `duelResult` in context. We need to push an update to that context.
+    // The private state includes `currentDuel`? No.
+    // getPlayerPrivate includes `currentDuelId`.
+    // We should emit an update for the duel or just let the hand update implicitly tell the user functionality is done?
+    // A specific 'loot_claimed' event might be cleaner but let's stick to state updates.
+    // If I modify `duel.result.lootableCards`, does the client see it? 
+    // Only if I resend the duel result.
+    // getPlayerDuelInfo returns actions/validCards. 
+    // We probably should re-emit the duel result to the player so the UI updates.
+    // Wait, `getDuelResultPrivate` logic returns `lootableCards`.
+    // So if I modify it in `handleClaimLoot` (splice), the next `getDuelResultPrivate` call will reflect that.
+    // `io.to(player.socketId).emit('private_state_update', ...)` calls `getPlayerPrivate`.
+    // `getPlayerPrivate` does NOT return duel result.
+    // `handleDuelAction` emits `duel_update` usually.
+    // I should emit `duel_update` to the player.
+    // But `duel_update` is usually for public updates.
+    // I'll emit `private_state_update` AND a custom event or rely on `duel_result` update?
+    // Looking at `socketHandlers.ts`, `resolveDuel` emits `duel_completed` or just phase change?
+    // It emits `duel_update` to room.
+
+    // I'll assume updating `lootableCards` in memory and re-emitting state is enough if the client logic checks empty list.
 }

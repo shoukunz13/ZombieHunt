@@ -67,6 +67,8 @@ export interface Player {
 
 export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun';
 
+export type EventType = 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end' | 'annihilation' | 'betrayal';
+
 export interface DuelAction {
     playerId: string;
     actionType: ActionType;
@@ -79,6 +81,8 @@ export interface DuelResult {
     winnerId: string | null; // null = draw
     loserId: string | null;
     stolenCardId?: string;
+    lootableCards?: NumberCard[]; // Cards played by loser that winner can pick from
+    cardLost?: Card; // Card lost due to penalty (e.g. zombie attacking zombie)
     infections: string[]; // playerIds who got infected
     cures: string[]; // playerIds who got cured
     shotgunKills: string[]; // playerIds killed by shotgun
@@ -106,7 +110,7 @@ export type GamePhase = 'waiting' | 'intro' | 'lobby' | 'duel' | 'meeting' | 'en
 export interface PublicEvent {
     id: string;
     round: number;
-    type: 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end' | 'annihilation';
+    type: EventType;
     message: string; // Anonymized message
 }
 
@@ -177,7 +181,6 @@ export interface PlayerPublic {
     isAlive: boolean;
     isPaired: boolean;
     isConnected: boolean;
-    numberCardCount: number;
     // Invite state for new flow
     hasOutgoingInvite: boolean;          // Has sent invite, waiting for response
     incomingInviteFromId: string | null; // ID of player who invited you
@@ -215,6 +218,7 @@ export interface DuelResultPrivate {
     shotgunResult?: 'killed_zombie' | 'wasted_on_human';
     opponentEliminated: boolean;
     youEliminated: boolean;
+    lootableCards?: NumberCard[]; // If you won, these are cards you can pick from
 }
 
 export interface GameStatePublic {

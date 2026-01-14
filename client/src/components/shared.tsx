@@ -59,11 +59,13 @@ export function PlayingCardComponent({
     card,
     selected = false,
     disabled = false,
+    size = 'md',
     onClick
 }: {
     card: NumberCard;
     selected?: boolean;
     disabled?: boolean;
+    size?: 'sm' | 'md' | 'lg';
     onClick?: () => void;
 }) {
     const suitSymbol = {
@@ -83,7 +85,8 @@ export function PlayingCardComponent({
 
     return (
         <div
-            className={`playing-card ${suitClass} ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+            className={`playing-card ${suitClass} ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''} size-${size}`}
+            style={size === 'sm' ? { width: '40px', height: '60px', fontSize: '0.8rem' } : undefined}
             onClick={disabled ? undefined : onClick}
         >
             <span className="playing-card-value">{valueDisplay}</span>

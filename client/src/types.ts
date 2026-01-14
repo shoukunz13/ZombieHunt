@@ -32,17 +32,40 @@ export interface ShotgunCard {
 
 export type Card = NumberCard | ZombieCard | VaccineCard | ShotgunCard;
 
+// ...
 export interface PlayerPublic {
     id: string;
     name: string;
     isAlive: boolean;
     isPaired: boolean;
     isConnected: boolean;
-    numberCardCount: number;
+    // numberCardCount removed
     // Invite state for new flow
     hasOutgoingInvite: boolean;          // Has sent invite, waiting for response
     incomingInviteFromId: string | null; // ID of player who invited you
     isInDuel: boolean;                   // Currently in a duel
+}
+
+// ...
+
+export interface PublicEvent {
+    id: string;
+    round: number;
+    type: 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end' | 'betrayal';
+    message: string;
+}
+
+export interface DuelResultPrivate {
+    outcome: 'win' | 'lose' | 'draw';
+    cardStolen?: NumberCard; // Need to import/use NumberCard
+    cardLost?: Card; // Need to use Card type
+    infected: boolean;
+    cured: boolean;
+    shotgunUsed: boolean;
+    shotgunResult?: 'killed_zombie' | 'wasted_on_human';
+    opponentEliminated: boolean;
+    youEliminated: boolean;
+    lootableCards?: NumberCard[]; // Cards available to pick
 }
 
 export interface PlayerPrivate {
@@ -69,24 +92,7 @@ export interface GameStatePublic {
     alivePlayerCount: number;
 }
 
-export interface PublicEvent {
-    id: string;
-    round: number;
-    type: 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end';
-    message: string;
-}
 
-export interface DuelResultPrivate {
-    outcome: 'win' | 'lose' | 'draw';
-    cardStolen?: Card;
-    cardLost?: Card;
-    infected: boolean;
-    cured: boolean;
-    shotgunUsed: boolean;
-    shotgunResult?: 'killed_zombie' | 'wasted_on_human';
-    opponentEliminated: boolean;
-    youEliminated: boolean;
-}
 
 export interface FinalReveal {
     humans: Array<{ id: string; name: string; teamId: number }>;

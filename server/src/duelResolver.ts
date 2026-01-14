@@ -299,39 +299,57 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
     const p1CanInfect = maxInfections === 0 || player1.infectionCount < maxInfections;
     const p2CanInfect = maxInfections === 0 || player2.infectionCount < maxInfections;
 
-    if (p1PlayedZombie && !p2PlayedZombie && action2.actionType !== 'vaccine' && p1CanInfect) {
-        // Player 1's zombie card wins, infect player 2
-        result.winnerId = player1.id;
-        result.loserId = player2.id;
-        infectPlayer(game, player2.id);
-        result.infections.push(player2.id);
-        player1.infectionCount++; // Track this zombie's infection count
-        // NOTE: Infection events removed to keep infections secret until end-game reveal
-
-        // Remove played number cards from player 2 if they played any
-        if (action2.actionType === 'number') {
-            const cardIds = action2.cardIds || (action2.cardId ? [action2.cardId] : []);
-            for (const cid of cardIds) {
-                removeNumberCard(player2, cid);
+    if (p1PlayedZombie && !p2PlayedZombie && action2.actionType !== 'vaccine') {
+        if (player2.role === 'zombie') {
+            // Zombie attacking Zombie -> Punishment!
+            const lostCard = getRandomStealableCard(player1.numberCards, 'random_any');
+            if (lostCard) {
+                removeNumberCard(player1, lostCard.id);
+                result.cardLost = lostCard;
+                addEvent(game, 'betrayal', 'A zombie attacked another zombie and lost a card!');
             }
-            p2CardUsed = true;
+        } else if (p1CanInfect) {
+            // Player 1's zombie card wins, infect player 2
+            result.winnerId = player1.id;
+            result.loserId = player2.id;
+            infectPlayer(game, player2.id);
+            result.infections.push(player2.id);
+            player1.infectionCount++;
+
+            // Remove played number cards from player 2
+            if (action2.actionType === 'number') {
+                const cardIds = action2.cardIds || (action2.cardId ? [action2.cardId] : []);
+                for (const cid of cardIds) {
+                    removeNumberCard(player2, cid);
+                }
+                p2CardUsed = true;
+            }
         }
-    } else if (p2PlayedZombie && !p1PlayedZombie && action1.actionType !== 'vaccine' && p2CanInfect) {
-        // Player 2's zombie card wins, infect player 1
-        result.winnerId = player2.id;
-        result.loserId = player1.id;
-        infectPlayer(game, player1.id);
-        result.infections.push(player1.id);
-        player2.infectionCount++; // Track this zombie's infection count
-        // NOTE: Infection events removed to keep infections secret until end-game reveal
-
-        // Remove played number cards from player 1 if they played any
-        if (action1.actionType === 'number') {
-            const cardIds = action1.cardIds || (action1.cardId ? [action1.cardId] : []);
-            for (const cid of cardIds) {
-                removeNumberCard(player1, cid);
+    } else if (p2PlayedZombie && !p1PlayedZombie && action1.actionType !== 'vaccine') {
+        if (player1.role === 'zombie') {
+            // Zombie attacking Zombie -> Punishment!
+            const lostCard = getRandomStealableCard(player2.numberCards, 'random_any');
+            if (lostCard) {
+                removeNumberCard(player2, lostCard.id);
+                result.cardLost = lostCard;
+                addEvent(game, 'betrayal', 'A zombie attacked another zombie and lost a card!');
             }
-            p1CardUsed = true;
+        } else if (p2CanInfect) {
+            // Player 2's zombie card wins, infect player 1
+            result.winnerId = player2.id;
+            result.loserId = player1.id;
+            infectPlayer(game, player1.id);
+            result.infections.push(player1.id);
+            player2.infectionCount++;
+
+            // Remove played number cards from player 1
+            if (action1.actionType === 'number') {
+                const cardIds = action1.cardIds || (action1.cardId ? [action1.cardId] : []);
+                for (const cid of cardIds) {
+                    removeNumberCard(player1, cid);
+                }
+                p1CardUsed = true;
+            }
         }
     } else if (action1.actionType === 'number' && action2.actionType === 'number') {
         // Priority 4: Number vs Number - sum all cards played
@@ -346,7 +364,7 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
         const sum2 = cards2.reduce((sum, card) => sum + card.value, 0);
 
         if (cards1.length > 0 && cards2.length > 0) {
-            // Remove all played cards from both players
+            // Remove all played cards from both players - they are spent
             for (const card of cards1) {
                 removeNumberCard(player1, card.id);
             }
@@ -359,25 +377,17 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             if (sum1 > sum2) {
                 result.winnerId = player1.id;
                 result.loserId = player2.id;
-                // Winner steals a card from loser
-                const stolenCard = getRandomStealableCard(player2.numberCards, CONFIG.STEAL_MODE);
-                if (stolenCard) {
-                    removeNumberCard(player2, stolenCard.id);
-                    player1.numberCards.push(stolenCard);
-                    result.stolenCardId = stolenCard.id;
-                }
+                // Winner can loot cards played by loser
+                result.lootableCards = cards2;
+                // No automatic steal anymore
             } else if (sum2 > sum1) {
                 result.winnerId = player2.id;
                 result.loserId = player1.id;
-                // Winner steals a card from loser
-                const stolenCard = getRandomStealableCard(player1.numberCards, CONFIG.STEAL_MODE);
-                if (stolenCard) {
-                    removeNumberCard(player1, stolenCard.id);
-                    player2.numberCards.push(stolenCard);
-                    result.stolenCardId = stolenCard.id;
-                }
+                // Winner can loot cards played by loser
+                result.lootableCards = cards1;
+                // No automatic steal anymore
             }
-            // Draw: no steal
+            // Draw: no loot
         }
     }
 
@@ -449,16 +459,24 @@ export function getDuelResultPrivate(
         if (result.winnerId === playerId) {
             // This player stole a card
             cardStolen = player.numberCards.find(c => c.id === result.stolenCardId);
-        } else if (result.loserId === playerId) {
-            // This player lost a card (we can't show which one was stolen since it's removed)
-            cardLost = undefined; // Card was removed, can't reference it
         }
+    }
+
+    // Check for punishment lost card (Zombie vs Zombie)
+    if (result.cardLost && result.loserId === playerId) {
+        cardLost = result.cardLost;
+    }
+    // Or if card was stolen (legacy/other modes)
+    else if (result.stolenCardId && result.loserId === playerId) {
+        // Can't show which specific card was stolen as it's gone from hand and not stored in result for loser
+        // But for new loot mode, they lose cards played
     }
 
     return {
         outcome,
         cardStolen,
         cardLost,
+        lootableCards: (outcome === 'win' && result.lootableCards) ? result.lootableCards : undefined,
         infected: result.infections.includes(playerId),
         cured: result.cures.includes(playerId),
         shotgunUsed: action?.actionType === 'shotgun',
@@ -484,7 +502,11 @@ export function getAvailableActions(player: Player, duel: Duel): ActionType[] {
 
     if (player.zombieCard) actions.push('zombie');
     if (player.vaccineCard) actions.push('vaccine');
-    if (player.hasShotgun) actions.push('shotgun');
+
+    // Zombies cannot use shotguns
+    if (player.hasShotgun && player.role === 'human') {
+        actions.push('shotgun');
+    }
 
     return actions;
 }

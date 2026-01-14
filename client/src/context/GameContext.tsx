@@ -100,6 +100,7 @@ interface GameContextType {
     clearLobbyDestroyed: () => void;
     lobbyRestarted: boolean;
     clearLobbyRestarted: () => void;
+    claimLoot: (duelId: string, cardId: string) => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -139,7 +140,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
     // Session state  
     const [hasSession, setHasSession] = useState<boolean>(() => loadSession() !== null);
-    const [gameCode, setGameCode] = useState<string | null>(null);
     const [lobbyDestroyed, setLobbyDestroyed] = useState(false);
     const [lobbyRestarted, setLobbyRestarted] = useState(false);
 
@@ -189,7 +189,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
                     gameCode: data.gameStatePublic.gameCode,
                 };
                 saveSession(session);
-                setGameCode(data.gameStatePublic.gameCode);
                 setHasSession(true);
             }
         });
@@ -235,8 +234,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         });
 
         newSocket.on('duel_resolution', (data: DuelResolutionPayload) => {
+            console.log('[duel_resolution] Received:', data);
             setDuelResult(data.resultPrivate);
             setPrivateState(data.updatedPrivateState);
+
+            if (data.resultPrivate.lootableCards) {
+                console.log('[duel_resolution] Lootable cards:', data.resultPrivate.lootableCards);
+            }
         });
 
         newSocket.on('meeting_summary', (data: MeetingSummaryPayload) => {
@@ -374,7 +378,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setYourOutcome(null);
         setIsEliminated(false);
         setEliminationReason(null);
-        setGameCode(null);
     }, [socket]);
 
     const clearLobbyDestroyed = useCallback(() => {
@@ -384,6 +387,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const clearLobbyRestarted = useCallback(() => {
         setLobbyRestarted(false);
     }, []);
+
+    const claimLoot = useCallback((duelId: string, cardId: string) => {
+        if (socket) {
+            socket.emit('claim_loot', { duelId, cardId });
+        }
+    }, [socket]);
 
     const value: GameContextType = {
         socket,
@@ -417,6 +426,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         clearLobbyDestroyed,
         lobbyRestarted,
         clearLobbyRestarted,
+        claimLoot,
     };
 
     return (
