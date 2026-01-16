@@ -316,7 +316,7 @@ export function LobbyScreen() {
                                     >
                                         <span className="player-name">{player.name}</span>
                                         <span className="player-status">
-                                            {player.numberCardCount} CARDS
+                                            STATS HIDDEN
                                         </span>
                                     </div>
                                 ))}
