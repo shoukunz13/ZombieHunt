@@ -5,12 +5,14 @@
  * - Large GAME OVER message
  * - Small text about removal
  * - Spectator mode only
+ * - Dramatic shotgun death animation if killed by shotgun
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { EventItem, DisplayTitle } from '../components/shared';
+import { ShotgunDeathOverlay } from '../components/ShotgunDeathOverlay';
 
 export function EliminatedScreen() {
     const navigate = useNavigate();
@@ -18,6 +20,19 @@ export function EliminatedScreen() {
         gameState, roundEvents,
         isEliminated, eliminationReason
     } = useGame();
+
+    const [showShotgunAnimation, setShowShotgunAnimation] = useState(false);
+
+    // Check if this is a shotgun death and show animation
+    useEffect(() => {
+        if (isEliminated && eliminationReason?.toLowerCase().includes('shotgun')) {
+            setShowShotgunAnimation(true);
+        }
+    }, [isEliminated, eliminationReason]);
+
+    const handleShotgunAnimationComplete = () => {
+        setShowShotgunAnimation(false);
+    };
 
     // If not eliminated, redirect
     useEffect(() => {
@@ -32,6 +47,11 @@ export function EliminatedScreen() {
             navigate('/end');
         }
     }, [gameState, navigate]);
+
+    // Show shotgun animation if applicable
+    if (showShotgunAnimation) {
+        return <ShotgunDeathOverlay onComplete={handleShotgunAnimationComplete} />;
+    }
 
     return (
         <div className="container">

@@ -171,7 +171,7 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
             handleHostIntroComplete(io, socket);
         });
 
-        socket.on('host_update_settings', (settings: { maxRounds?: number; zombiesPerTeam?: number }) => {
+        socket.on('host_update_settings', (settings: Partial<import('./types').GameSettings>) => {
             handleHostUpdateSettings(io, socket, settings);
         });
 
@@ -554,7 +554,7 @@ function handleHostIntroComplete(io: Server, socket: Socket): void {
     }
 }
 
-function handleHostUpdateSettings(io: Server, socket: Socket, settings: { maxRounds?: number; zombiesPerTeam?: number }): void {
+function handleHostUpdateSettings(io: Server, socket: Socket, settings: Partial<import('./types').GameSettings>): void {
     if (socket.id !== hostSocketId) return;
 
     const game = getGame();

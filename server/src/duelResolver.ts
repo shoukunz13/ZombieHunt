@@ -123,6 +123,30 @@ function validateAction(
             if (!player.hasShotgun) return { valid: false, error: 'No shotgun' };
             return { valid: true };
 
+        case 'zombie_with_numbers':
+            // Competitive mode: zombie must play zombie card + number cards together
+            if (!player.zombieCard) return { valid: false, error: 'No zombie card' };
+            if (!cardIds || cardIds.length === 0) return { valid: false, error: 'Must play number cards with zombie card' };
+            if (cardIds.length > 5) return { valid: false, error: 'Maximum 5 cards allowed' };
+
+            // Validate all number cards exist and are same suit
+            const zombieCards: NumberCard[] = [];
+            let zombieCardSuit: string | null = null;
+
+            for (const cid of cardIds) {
+                const card = player.numberCards.find(c => c.id === cid);
+                if (!card) return { valid: false, error: 'Card not in hand' };
+
+                if (zombieCardSuit === null) {
+                    zombieCardSuit = card.suit;
+                } else if (card.suit !== zombieCardSuit) {
+                    return { valid: false, error: 'All cards must be the same suit' };
+                }
+
+                zombieCards.push(card);
+            }
+            return { valid: true };
+
         default:
             return { valid: false, error: 'Invalid action type' };
     }
@@ -218,6 +242,18 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
         eliminations: [],
     };
 
+    // Capture played cards BEFORE any removals (for reveal animation)
+    const getPlayedCards = (action: DuelAction, player: Player): NumberCard[] => {
+        // Include number cards from both 'number' and 'zombie_with_numbers' actions
+        if (action.actionType !== 'number' && action.actionType !== 'zombie_with_numbers') return [];
+        const cardIds = action.cardIds || (action.cardId ? [action.cardId] : []);
+        return cardIds
+            .map(id => player.numberCards.find(c => c.id === id))
+            .filter((c): c is NumberCard => c !== undefined);
+    };
+    result.p1PlayedCards = getPlayedCards(action1, player1);
+    result.p2PlayedCards = getPlayedCards(action2, player2);
+
     // Track card consumption
     let p1CardUsed = false;
     let p2CardUsed = false;
@@ -309,20 +345,41 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 addEvent(game, 'betrayal', 'A zombie attacked another zombie and lost a card!');
             }
         } else if (p1CanInfect) {
-            // Player 1's zombie card wins, infect player 2
-            result.winnerId = player1.id;
-            result.loserId = player2.id;
-            infectPlayer(game, player2.id);
-            result.infections.push(player2.id);
-            player1.infectionCount++;
+            // Check if requireZombieWin mode is enabled
+            if (game.settings.requireZombieWin && action2.actionType === 'number') {
+                // In competitive mode: zombie must also play numbers and win to infect
+                // For now, zombie card alone loses to any numbers played
+                // The human wins if they played numbers
+                const cardIds2 = action2.cardIds || (action2.cardId ? [action2.cardId] : []);
+                const cards2 = cardIds2.map(id => player2.numberCards.find(c => c.id === id)).filter((c): c is NumberCard => c !== undefined);
 
-            // Remove played number cards from player 2
-            if (action2.actionType === 'number') {
-                const cardIds = action2.cardIds || (action2.cardId ? [action2.cardId] : []);
-                for (const cid of cardIds) {
-                    removeNumberCard(player2, cid);
+                if (cards2.length > 0) {
+                    // Human played numbers, they win - no infection
+                    result.winnerId = player2.id;
+                    result.loserId = player1.id;
+                    // Remove opponent's cards and make them lootable
+                    for (const card of cards2) {
+                        removeNumberCard(player2, card.id);
+                    }
+                    result.lootableCards = cards2;
+                    p2CardUsed = true;
                 }
-                p2CardUsed = true;
+            } else {
+                // Standard mode: zombie card always infects (unless vaccine)
+                result.winnerId = player1.id;
+                result.loserId = player2.id;
+                infectPlayer(game, player2.id);
+                result.infections.push(player2.id);
+                player1.infectionCount++;
+
+                // Remove played number cards from player 2
+                if (action2.actionType === 'number') {
+                    const cardIds = action2.cardIds || (action2.cardId ? [action2.cardId] : []);
+                    for (const cid of cardIds) {
+                        removeNumberCard(player2, cid);
+                    }
+                    p2CardUsed = true;
+                }
             }
         }
     } else if (p2PlayedZombie && !p1PlayedZombie && action1.actionType !== 'vaccine') {
@@ -335,20 +392,39 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 addEvent(game, 'betrayal', 'A zombie attacked another zombie and lost a card!');
             }
         } else if (p2CanInfect) {
-            // Player 2's zombie card wins, infect player 1
-            result.winnerId = player2.id;
-            result.loserId = player1.id;
-            infectPlayer(game, player1.id);
-            result.infections.push(player1.id);
-            player2.infectionCount++;
+            // Check if requireZombieWin mode is enabled
+            if (game.settings.requireZombieWin && action1.actionType === 'number') {
+                // In competitive mode: zombie must also play numbers and win to infect
+                const cardIds1 = action1.cardIds || (action1.cardId ? [action1.cardId] : []);
+                const cards1 = cardIds1.map(id => player1.numberCards.find(c => c.id === id)).filter((c): c is NumberCard => c !== undefined);
 
-            // Remove played number cards from player 1
-            if (action1.actionType === 'number') {
-                const cardIds = action1.cardIds || (action1.cardId ? [action1.cardId] : []);
-                for (const cid of cardIds) {
-                    removeNumberCard(player1, cid);
+                if (cards1.length > 0) {
+                    // Human played numbers, they win - no infection
+                    result.winnerId = player1.id;
+                    result.loserId = player2.id;
+                    // Remove opponent's cards and make them lootable
+                    for (const card of cards1) {
+                        removeNumberCard(player1, card.id);
+                    }
+                    result.lootableCards = cards1;
+                    p1CardUsed = true;
                 }
-                p1CardUsed = true;
+            } else {
+                // Standard mode: zombie card always infects
+                result.winnerId = player2.id;
+                result.loserId = player1.id;
+                infectPlayer(game, player1.id);
+                result.infections.push(player1.id);
+                player2.infectionCount++;
+
+                // Remove played number cards from player 1
+                if (action1.actionType === 'number') {
+                    const cardIds = action1.cardIds || (action1.cardId ? [action1.cardId] : []);
+                    for (const cid of cardIds) {
+                        removeNumberCard(player1, cid);
+                    }
+                    p1CardUsed = true;
+                }
             }
         }
     } else if (action1.actionType === 'number' && action2.actionType === 'number') {
@@ -389,6 +465,83 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             }
             // Draw: no loot
         }
+    }
+    // Priority 5: zombie_with_numbers vs number - competitive infection mode
+    else if (action1.actionType === 'zombie_with_numbers' && action2.actionType === 'number') {
+        const cardIds1 = action1.cardIds || [];
+        const cardIds2 = action2.cardIds || (action2.cardId ? [action2.cardId] : []);
+
+        const cards1 = cardIds1.map(id => player1.numberCards.find(c => c.id === id)).filter((c): c is NumberCard => c !== undefined);
+        const cards2 = cardIds2.map(id => player2.numberCards.find(c => c.id === id)).filter((c): c is NumberCard => c !== undefined);
+
+        const sum1 = cards1.reduce((sum, card) => sum + card.value, 0);
+        const sum2 = cards2.reduce((sum, card) => sum + card.value, 0);
+
+        // Remove played cards
+        for (const card of cards1) removeNumberCard(player1, card.id);
+        for (const card of cards2) removeNumberCard(player2, card.id);
+        p1CardUsed = true;
+        p2CardUsed = true;
+
+        if (sum1 > sum2) {
+            // Zombie wins - infect opponent!
+            result.winnerId = player1.id;
+            result.loserId = player2.id;
+            result.lootableCards = cards2;
+
+            // Infect the human
+            if (player2.role === 'human') {
+                infectPlayer(game, player2.id);
+                result.infections.push(player2.id);
+                player1.infectionCount++;
+                result.zombieCardRevealed = true;
+            }
+        } else if (sum2 > sum1) {
+            // Human wins - zombie loses cards, no infection
+            result.winnerId = player2.id;
+            result.loserId = player1.id;
+            result.lootableCards = cards1;
+            // Zombie card stays hidden
+        }
+        // Draw: no infection, both lose cards
+    }
+    else if (action2.actionType === 'zombie_with_numbers' && action1.actionType === 'number') {
+        const cardIds1 = action1.cardIds || (action1.cardId ? [action1.cardId] : []);
+        const cardIds2 = action2.cardIds || [];
+
+        const cards1 = cardIds1.map(id => player1.numberCards.find(c => c.id === id)).filter((c): c is NumberCard => c !== undefined);
+        const cards2 = cardIds2.map(id => player2.numberCards.find(c => c.id === id)).filter((c): c is NumberCard => c !== undefined);
+
+        const sum1 = cards1.reduce((sum, card) => sum + card.value, 0);
+        const sum2 = cards2.reduce((sum, card) => sum + card.value, 0);
+
+        // Remove played cards
+        for (const card of cards1) removeNumberCard(player1, card.id);
+        for (const card of cards2) removeNumberCard(player2, card.id);
+        p1CardUsed = true;
+        p2CardUsed = true;
+
+        if (sum2 > sum1) {
+            // Zombie wins - infect opponent!
+            result.winnerId = player2.id;
+            result.loserId = player1.id;
+            result.lootableCards = cards1;
+
+            // Infect the human
+            if (player1.role === 'human') {
+                infectPlayer(game, player1.id);
+                result.infections.push(player1.id);
+                player2.infectionCount++;
+                result.zombieCardRevealed = true;
+            }
+        } else if (sum1 > sum2) {
+            // Human wins - zombie loses cards, no infection
+            result.winnerId = player1.id;
+            result.loserId = player2.id;
+            result.lootableCards = cards2;
+            // Zombie card stays hidden
+        }
+        // Draw: no infection, both lose cards
     }
 
     // Check for elimination (0 number cards)
@@ -472,6 +625,15 @@ export function getDuelResultPrivate(
         // But for new loot mode, they lose cards played
     }
 
+    // Get cards played by each player for reveal animation
+    // Use the stored cards from the result (captured before removal)
+    const isPlayer1 = duel.player1Id === playerId;
+    const yourCards = isPlayer1 ? result.p1PlayedCards : result.p2PlayedCards;
+    const opponentCards = isPlayer1 ? result.p2PlayedCards : result.p1PlayedCards;
+
+    // Determine if zombie card was revealed (opponent infected this player)
+    const zombieCardRevealed = result.zombieCardRevealed && result.infections.includes(playerId);
+
     return {
         outcome,
         cardStolen,
@@ -485,6 +647,9 @@ export function getDuelResultPrivate(
             : undefined,
         opponentEliminated: result.eliminations.includes(opponentId),
         youEliminated: result.eliminations.includes(playerId),
+        yourCards,
+        opponentCards,
+        zombieCardRevealed,
     };
 }
 

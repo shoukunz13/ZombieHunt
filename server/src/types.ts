@@ -65,7 +65,7 @@ export interface Player {
 
 // ============ Duel Types ============
 
-export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun';
+export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun' | 'zombie_with_numbers';
 
 export type EventType = 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end' | 'annihilation' | 'betrayal';
 
@@ -87,6 +87,9 @@ export interface DuelResult {
     cures: string[]; // playerIds who got cured
     shotgunKills: string[]; // playerIds killed by shotgun
     eliminations: string[]; // playerIds eliminated (out of cards or shotgunned)
+    p1PlayedCards?: NumberCard[]; // Cards player1 played (for reveal animation)
+    p2PlayedCards?: NumberCard[]; // Cards player2 played (for reveal animation)
+    zombieCardRevealed?: boolean; // True if zombie won and revealed their card to infect
 }
 
 export type DuelStatus = 'pending' | 'in_progress' | 'resolved';
@@ -124,6 +127,7 @@ export interface GameSettings {
     shotgunRatio: number;        // 0-100, % of players with shotguns
     maxInfections: number;       // 0-20, max infections per zombie (0 = unlimited)
     annihilationRule: boolean;   // If all become zombies, everyone dies
+    requireZombieWin: boolean;   // Zombie must win card battle to infect
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -134,6 +138,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
     shotgunRatio: 50,
     maxInfections: 0,
     annihilationRule: true,
+    requireZombieWin: false,
 };
 
 /**
@@ -219,6 +224,9 @@ export interface DuelResultPrivate {
     opponentEliminated: boolean;
     youEliminated: boolean;
     lootableCards?: NumberCard[]; // If you won, these are cards you can pick from
+    yourCards?: NumberCard[]; // Cards you played (for reveal animation)
+    opponentCards?: NumberCard[]; // Cards opponent played (for reveal animation)
+    zombieCardRevealed?: boolean; // If true, show zombie card reveal animation (opponent infected you)
 }
 
 export interface GameStatePublic {

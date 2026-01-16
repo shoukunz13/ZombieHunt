@@ -16,6 +16,9 @@ import {
     RoleBadge, DisplayTitle, SystemMessage, Spinner
 } from '../components/shared';
 import { RulebookModal, RulebookButton } from '../components/RulebookModal';
+import { CardRevealAnimation } from '../components/CardRevealAnimation';
+import { InfectionOverlay } from '../components/InfectionOverlay';
+import { CureOverlay } from '../components/CureOverlay';
 import { ActionType, NumberCard } from '../types';
 import { playDuelStartSound } from '../utils/sounds';
 
@@ -32,10 +35,15 @@ export function DuelScreen() {
     const [showResult, setShowResult] = useState(false);
     const [showRulebook, setShowRulebook] = useState(false);
     const [lootClaimed, setLootClaimed] = useState(false);
+    const [showCardReveal, setShowCardReveal] = useState(false);
+    const [showInfectionOverlay, setShowInfectionOverlay] = useState(false);
+    const [showCureOverlay, setShowCureOverlay] = useState(false);
+    const [infectSelected, setInfectSelected] = useState(false); // For competitive zombie mode
 
-    // Reset loot claimed state when new duel starts
+    // Reset states when new duel starts
     useEffect(() => {
         setLootClaimed(false);
+        setInfectSelected(false);
     }, [currentDuel]);
 
     // ... (existing effects)
@@ -92,9 +100,47 @@ export function DuelScreen() {
     // Show result modal when duel resolves
     useEffect(() => {
         if (duelResult) {
-            setShowResult(true);
+            // If we have cards to reveal, show card reveal animation first
+            const hasCardsToReveal = (duelResult.yourCards && duelResult.yourCards.length > 0) ||
+                (duelResult.opponentCards && duelResult.opponentCards.length > 0);
+            if (hasCardsToReveal) {
+                setShowCardReveal(true);
+            } else {
+                // No cards to reveal - check for infection/cure overlays first
+                if (duelResult.infected) {
+                    setShowInfectionOverlay(true);
+                } else if (duelResult.cured) {
+                    setShowCureOverlay(true);
+                } else {
+                    setShowResult(true);
+                }
+            }
         }
     }, [duelResult]);
+
+    // Handle card reveal animation completion
+    const handleCardRevealComplete = () => {
+        setShowCardReveal(false);
+        // Check if we need to show infection or cure overlay
+        if (duelResult?.infected) {
+            setShowInfectionOverlay(true);
+        } else if (duelResult?.cured) {
+            setShowCureOverlay(true);
+        } else {
+            setShowResult(true);
+        }
+    };
+
+    // Handle overlay completions
+    const handleInfectionComplete = () => {
+        setShowInfectionOverlay(false);
+        setShowResult(true);
+    };
+
+    const handleCureComplete = () => {
+        setShowCureOverlay(false);
+        setShowResult(true);
+    };
 
     // Play duel start sound when entering duel
     const hasPlayedDuelSound = useRef(false);
@@ -136,7 +182,8 @@ export function DuelScreen() {
         if (selectedCardIds.includes(card.id)) {
             // Deselect
             setSelectedCardIds(prev => prev.filter(id => id !== card.id));
-            if (selectedCardIds.length === 1) {
+            // Only clear selectedAction if not in infect mode and no cards left
+            if (selectedCardIds.length === 1 && !infectSelected) {
                 setSelectedAction(null);
             }
         } else {
@@ -151,12 +198,26 @@ export function DuelScreen() {
             }
 
             setSelectedCardIds(prev => [...prev, card.id]);
-            setSelectedAction('number');
+            // Only set selectedAction to 'number' if not in infect mode
+            if (!infectSelected) {
+                setSelectedAction('number');
+            }
         }
     };
 
     const handleConfirm = () => {
-        console.log('[handleConfirm] Called with:', { selectedAction, selectedCardIds, currentDuel });
+        console.log('[handleConfirm] Called with:', { selectedAction, selectedCardIds, infectSelected, currentDuel });
+
+        // Competitive zombie mode: infect + cards together
+        if (infectSelected && selectedCardIds.length > 0) {
+            console.log('[handleConfirm] Submitting zombie_with_numbers action with cards:', selectedCardIds);
+            submitAction('zombie_with_numbers', selectedCardIds[0], selectedCardIds);
+            setInfectSelected(false);
+            setSelectedCardIds([]);
+            setSelectedAction(null);
+            return;
+        }
+
         if (!selectedAction) {
             console.log('[handleConfirm] No selectedAction, returning');
             return;
@@ -175,11 +236,27 @@ export function DuelScreen() {
     };
 
     const handleSpecialAction = (action: ActionType) => {
-        if (selectedAction === action) {
-            setSelectedAction(null);
+        if (action === 'zombie') {
+            // Toggle infect selection for competitive mode
+            if (infectSelected) {
+                setInfectSelected(false);
+                // If cards are selected, switch to normal number action
+                if (selectedCardIds.length > 0) {
+                    setSelectedAction('number');
+                }
+            } else {
+                setInfectSelected(true);
+                setSelectedAction(null); // Clear any other special action
+                // Keep card selection - user needs to select cards too
+            }
         } else {
-            setSelectedAction(action);
-            setSelectedCardIds([]); // Clear card selection when selecting special
+            if (selectedAction === action) {
+                setSelectedAction(null);
+            } else {
+                setSelectedAction(action);
+                setSelectedCardIds([]); // Clear card selection when selecting special
+                setInfectSelected(false); // Clear infect selection
+            }
         }
     };
 
@@ -188,7 +265,13 @@ export function DuelScreen() {
         clearDuel(); // Clear duel state so navigation can proceed
     };
 
-    const canConfirm = selectedAction && (selectedAction !== 'number' || selectedCardIds.length > 0);
+    // Can confirm if:
+    // - Standard special action selected (vaccine/shotgun), OR
+    // - Number cards selected (and no infect selected), OR
+    // - Infect selected AND cards selected (competitive zombie mode)
+    const canConfirm = (selectedAction && selectedAction !== 'number') ||
+        (selectedAction === 'number' && selectedCardIds.length > 0) ||
+        (infectSelected && selectedCardIds.length > 0);
 
     // Check if a card can be selected (must be same suit as already selected)
     const canSelectCard = (card: NumberCard): boolean => {
@@ -303,7 +386,7 @@ export function DuelScreen() {
                                 {privateState.zombieCard && (
                                     <SpecialCardComponent
                                         type="zombie"
-                                        selected={selectedAction === 'zombie'}
+                                        selected={infectSelected}
                                         onClick={() => handleSpecialAction('zombie')}
                                     />
                                 )}
@@ -373,10 +456,12 @@ export function DuelScreen() {
                                 disabled={!canConfirm}
                                 onClick={handleConfirm}
                             >
-                                {selectedAction === 'shotgun' ? 'FIRE SHOTGUN' :
-                                    selectedAction === 'vaccine' ? 'ADMINISTER CURE' :
-                                        selectedAction === 'zombie' ? 'INFECT TARGET' :
-                                            selectedCardIds.length > 0 ? `PLAY ${selectedCardIds.length} CARD${selectedCardIds.length > 1 ? 'S' : ''} (${selectedCardsInfo.sum})` : 'SELECT ACTION'}
+                                {infectSelected && selectedCardIds.length > 0
+                                    ? `PLAY ${selectedCardIds.length} CARD${selectedCardIds.length > 1 ? 'S' : ''} + INFECT CARD (${selectedCardsInfo.sum})`
+                                    : selectedAction === 'shotgun' ? 'FIRE SHOTGUN' :
+                                        selectedAction === 'vaccine' ? 'ADMINISTER CURE' :
+                                            selectedAction === 'zombie' ? 'INFECT TARGET' :
+                                                selectedCardIds.length > 0 ? `PLAY ${selectedCardIds.length} CARD${selectedCardIds.length > 1 ? 'S' : ''} (${selectedCardsInfo.sum})` : 'SELECT ACTION'}
                             </button>
                         </div>
                     </>
@@ -384,7 +469,16 @@ export function DuelScreen() {
 
                 {/* DRAMATIC RESULT OVERLAY */}
                 {showResult && duelResult && (
-                    <div className={`result-overlay ${getResultOverlayClass()}`} onClick={handleCloseResult}>
+                    <div
+                        className={`result-overlay ${getResultOverlayClass()}`}
+                        onClick={() => {
+                            // Prevent closing if loot needs to be claimed
+                            if (duelResult.lootableCards && duelResult.lootableCards.length > 0 && !lootClaimed) {
+                                return;
+                            }
+                            handleCloseResult();
+                        }}
+                    >
                         <div className="result-content">
                             {/* Large Icon */}
                             <div className="result-icon">
@@ -408,16 +502,61 @@ export function DuelScreen() {
 
                             {/* Additional Details */}
                             <div className="result-details">
-                                {/* Loot Selection */}
+                                {/* Loot Selection - Must select before closing */}
                                 {duelResult.lootableCards && duelResult.lootableCards.length > 0 && !lootClaimed && (
-                                    <div className="mt-md mb-md animate-fade-in">
-                                        <p className="result-detail-item success" style={{ justifyContent: 'center', marginBottom: 'var(--space-sm)' }}>
-                                            ★ VICTORY SPOILS: CHOOSE A CARD ★
+                                    <div
+                                        className="mt-md mb-md animate-fade-in"
+                                        style={{
+                                            padding: 'var(--space-lg)',
+                                            background: 'linear-gradient(180deg, rgba(255,215,0,0.2) 0%, rgba(255,165,0,0.1) 100%)',
+                                            border: '2px solid var(--accent-gold)',
+                                            borderRadius: 'var(--rounded)',
+                                            animation: 'pulse 1.5s ease-in-out infinite',
+                                        }}
+                                    >
+                                        <p className="result-detail-item success" style={{
+                                            justifyContent: 'center',
+                                            marginBottom: 'var(--space-md)',
+                                            fontSize: 'var(--font-size-lg)',
+                                            fontWeight: 'bold',
+                                            color: 'var(--accent-gold)',
+                                        }}>
+                                            ★ TAKE YOUR REWARD ★
                                         </p>
-                                        <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'center' }}>
+                                        <p style={{
+                                            textAlign: 'center',
+                                            marginBottom: 'var(--space-md)',
+                                            color: 'var(--text-muted)',
+                                            fontSize: 'var(--font-size-sm)',
+                                        }}>
+                                            TAP A CARD TO CLAIM
+                                        </p>
+                                        <div style={{
+                                            display: 'flex',
+                                            gap: 'var(--space-md)',
+                                            justifyContent: 'center',
+                                            flexWrap: 'wrap',
+                                        }}>
                                             {duelResult.lootableCards.map(card => (
-                                                <div key={card.id} onClick={(e) => { e.stopPropagation(); handleLootClaim(card.id); }}>
-                                                    <PlayingCardComponent card={card} size="sm" />
+                                                <div
+                                                    key={card.id}
+                                                    onClick={(e) => { e.stopPropagation(); handleLootClaim(card.id); }}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        transform: 'scale(1.2)',
+                                                        filter: 'drop-shadow(0 0 10px rgba(255,215,0,0.5))',
+                                                        transition: 'all 0.2s ease',
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.transform = 'scale(1.35)';
+                                                        e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(255,215,0,0.8))';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.transform = 'scale(1.2)';
+                                                        e.currentTarget.style.filter = 'drop-shadow(0 0 10px rgba(255,215,0,0.5))';
+                                                    }}
+                                                >
+                                                    <PlayingCardComponent card={card} size="md" />
                                                 </div>
                                             ))}
                                         </div>
@@ -474,6 +613,26 @@ export function DuelScreen() {
                             </p>
                         </div>
                     </div>
+                )}
+
+                {/* Card Reveal Animation */}
+                {showCardReveal && duelResult && (
+                    <CardRevealAnimation
+                        yourCards={duelResult.yourCards || []}
+                        opponentCards={duelResult.opponentCards || []}
+                        outcome={duelResult.outcome}
+                        onComplete={handleCardRevealComplete}
+                    />
+                )}
+
+                {/* Infection Overlay */}
+                {showInfectionOverlay && (
+                    <InfectionOverlay onComplete={handleInfectionComplete} />
+                )}
+
+                {/* Cure Overlay */}
+                {showCureOverlay && (
+                    <CureOverlay onComplete={handleCureComplete} />
                 )}
 
                 {/* Rulebook Button & Modal */}

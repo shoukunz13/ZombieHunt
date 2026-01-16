@@ -6,7 +6,7 @@
 export type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
 export type Role = 'human' | 'zombie';
 export type GamePhase = 'waiting' | 'intro' | 'lobby' | 'duel' | 'meeting' | 'ended';
-export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun';
+export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun' | 'zombie_with_numbers';
 
 export interface NumberCard {
     id: string;
@@ -66,6 +66,9 @@ export interface DuelResultPrivate {
     opponentEliminated: boolean;
     youEliminated: boolean;
     lootableCards?: NumberCard[]; // Cards available to pick
+    yourCards?: NumberCard[]; // Cards you played (for reveal animation)
+    opponentCards?: NumberCard[]; // Cards opponent played (for reveal animation)
+    zombieCardRevealed?: boolean; // True if opponent used zombie_with_numbers and won
 }
 
 export interface PlayerPrivate {
@@ -155,6 +158,7 @@ export interface GameSettings {
     shotgunRatio: number;
     maxInfections: number;
     annihilationRule: boolean;
+    requireZombieWin: boolean;
 }
 
 export interface HostState {

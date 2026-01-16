@@ -117,6 +117,9 @@ export function updateSettings(game: GameState, settings: Partial<GameSettings>)
     if (settings.annihilationRule !== undefined) {
         game.settings.annihilationRule = settings.annihilationRule;
     }
+    if (settings.requireZombieWin !== undefined) {
+        game.settings.requireZombieWin = settings.requireZombieWin;
+    }
 
     saveGame(game);
     return true;

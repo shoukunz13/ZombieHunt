@@ -385,6 +385,19 @@ function HostDashboardContent() {
                                     ANNIHILATION RULE (all zombies = everyone dies)
                                 </label>
                             </div>
+
+                            {/* Competitive Infection Toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                                <input
+                                    type="checkbox"
+                                    id="requireZombieWin"
+                                    checked={hostState.settings.requireZombieWin ?? false}
+                                    onChange={(e) => updateSettings({ requireZombieWin: e.target.checked })}
+                                />
+                                <label htmlFor="requireZombieWin" className="text-system">
+                                    COMPETITIVE INFECTION (zombie must beat opponent's cards to infect)
+                                </label>
+                            </div>
                         </div>
                     </div>
                 )}
