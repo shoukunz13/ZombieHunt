@@ -937,7 +937,10 @@ function checkRoundComplete(io: Server, game: GameState): void {
     }
 
     // Count players who have completed duels (isPaired = true AND currentDuelId = null)
-    const completedCount = alivePlayers.filter(p => p.isPaired && !p.currentDuelId).length;
+    // Also count unpaired players as "completed" since they don't need to duel this round
+    const completedCount = alivePlayers.filter(p =>
+        (p.isPaired && !p.currentDuelId) || !p.isPaired
+    ).length;
 
     // Count players currently in duels
     const inDuelCount = alivePlayers.filter(p => p.currentDuelId !== null).length;

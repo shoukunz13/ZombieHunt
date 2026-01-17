@@ -287,6 +287,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
             // Clear end game state so player can rejoin
             setFinalReveal(null);
             setYourOutcome(null);
+            // Clear elimination state so killed players can rejoin
+            setIsEliminated(false);
+            setEliminationReason(null);
         });
 
         setSocket(newSocket);
