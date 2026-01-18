@@ -552,6 +552,9 @@ export function startNextRound(game: GameState): void {
     game.phase = 'lobby';
     game.phaseEndsAt = undefined;
 
+    // Clear duels from previous round so they don't affect phase transition checks
+    game.currentRoundDuels = [];
+
     addEvent(game, 'round_start', `Round ${game.round} begins`);
     saveGame(game);
 }
