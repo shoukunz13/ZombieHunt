@@ -69,6 +69,10 @@ export interface DuelResultPrivate {
     yourCards?: NumberCard[]; // Cards you played (for reveal animation)
     opponentCards?: NumberCard[]; // Cards opponent played (for reveal animation)
     zombieCardRevealed?: boolean; // True if opponent used zombie_with_numbers and won
+    yourPlayedZombie?: boolean; // True if you played a zombie card
+    opponentPlayedZombie?: boolean; // True if opponent played a zombie card
+    yourPlayedVaccine?: boolean; // True if you played a vaccine card
+    opponentPlayedVaccine?: boolean; // True if opponent played a vaccine card
 }
 
 export interface PlayerPrivate {

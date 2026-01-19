@@ -15,6 +15,10 @@ interface CardRevealAnimationProps {
     opponentCards: NumberCard[];
     outcome: 'win' | 'lose' | 'draw';
     onComplete: () => void;
+    yourPlayedZombie?: boolean;
+    opponentPlayedZombie?: boolean;
+    yourPlayedVaccine?: boolean;
+    opponentPlayedVaccine?: boolean;
 }
 
 const CARD_WIDTH = 70;
@@ -28,7 +32,11 @@ export function CardRevealAnimation({
     yourCards,
     opponentCards,
     outcome,
-    onComplete
+    onComplete,
+    yourPlayedZombie = false,
+    opponentPlayedZombie = false,
+    yourPlayedVaccine = false,
+    opponentPlayedVaccine = false
 }: CardRevealAnimationProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
@@ -191,28 +199,90 @@ export function CardRevealAnimation({
                 return card;
             };
 
-            // Position cards
-            const positionCards = (cards: NumberCard[], row: Container) => {
-                const totalWidth = cards.length * CARD_WIDTH + (cards.length - 1) * CARD_GAP;
+            // Create special card face (zombie or vaccine)
+            const createSpecialCardFace = (cardType: 'zombie' | 'vaccine') => {
+                const card = new Container();
+                const isZombie = cardType === 'zombie';
+                const bgColor = isZombie ? 0x1a4d2e : 0x1e3a5f;
+                const textColor = isZombie ? 0x4ade80 : 0x60a5fa;
+
+                const bg = new Graphics();
+                bg.roundRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 8);
+                bg.fill(bgColor);
+                bg.stroke({ color: textColor, width: 2 });
+
+                const symbolStyle = new TextStyle({
+                    fontFamily: 'Courier New, monospace',
+                    fontSize: 32,
+                    fontWeight: 'bold',
+                    fill: textColor,
+                });
+
+                const symbol = new Text({
+                    text: isZombie ? '☠' : '✚',
+                    style: symbolStyle
+                });
+                symbol.anchor.set(0.5);
+                symbol.y = -10;
+
+                const labelStyle = new TextStyle({
+                    fontFamily: 'Courier New, monospace',
+                    fontSize: 10,
+                    fill: textColor,
+                });
+
+                const label = new Text({
+                    text: isZombie ? 'INFECT' : 'CURE',
+                    style: labelStyle
+                });
+                label.anchor.set(0.5);
+                label.y = 25;
+
+                card.addChild(bg, symbol, label);
+                return card;
+            };
+
+            // Position cards (including special cards)
+            const positionCards = (
+                cards: NumberCard[],
+                row: Container,
+                hasZombie: boolean,
+                hasVaccine: boolean
+            ) => {
+                // Build array of all cards to display (special cards first, then number cards)
+                type CardItem = { type: 'number'; card: NumberCard } | { type: 'zombie' } | { type: 'vaccine' };
+                const allCards: CardItem[] = [];
+
+                if (hasZombie) allCards.push({ type: 'zombie' });
+                if (hasVaccine) allCards.push({ type: 'vaccine' });
+                cards.forEach(card => allCards.push({ type: 'number', card }));
+
+                const totalWidth = allCards.length * CARD_WIDTH + (allCards.length - 1) * CARD_GAP;
                 const startX = -totalWidth / 2 + CARD_WIDTH / 2;
 
-                return cards.map((card, i) => {
+                return allCards.map((item, i) => {
                     const back = createCardBack();
                     back.x = startX + i * (CARD_WIDTH + CARD_GAP);
                     row.addChild(back);
 
-                    const face = createCardFace(card);
+                    let face: Container;
+                    if (item.type === 'number') {
+                        face = createCardFace(item.card);
+                    } else {
+                        face = createSpecialCardFace(item.type);
+                    }
+
                     face.x = back.x;
                     face.scale.x = 0;
                     face.visible = false;
                     row.addChild(face);
 
-                    return { back, face, card };
+                    return { back, face, item };
                 });
             };
 
-            const yourCardObjs = positionCards(yourCards, yourRow);
-            const opponentCardObjs = positionCards(opponentCards, opponentRow);
+            const yourCardObjs = positionCards(yourCards, yourRow, yourPlayedZombie, yourPlayedVaccine);
+            const opponentCardObjs = positionCards(opponentCards, opponentRow, opponentPlayedZombie, opponentPlayedVaccine);
 
             // Flip animation
             const flipCard = (back: Container, face: Container): Promise<void> => {
@@ -258,13 +328,21 @@ export function CardRevealAnimation({
                     // Flip your card
                     if (i < yourCardObjs.length) {
                         flips.push(flipCard(yourCardObjs[i].back, yourCardObjs[i].face));
-                        yourTotal += yourCardObjs[i].card.value;
+                        // Only add to total if it's a number card
+                        const yourItem = yourCardObjs[i].item;
+                        if (yourItem.type === 'number') {
+                            yourTotal += yourItem.card.value;
+                        }
                     }
 
                     // Flip opponent card
                     if (i < opponentCardObjs.length) {
                         flips.push(flipCard(opponentCardObjs[i].back, opponentCardObjs[i].face));
-                        opponentTotal += opponentCardObjs[i].card.value;
+                        // Only add to total if it's a number card
+                        const opponentItem = opponentCardObjs[i].item;
+                        if (opponentItem.type === 'number') {
+                            opponentTotal += opponentItem.card.value;
+                        }
                     }
 
                     await Promise.all(flips);

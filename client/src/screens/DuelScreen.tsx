@@ -622,6 +622,10 @@ export function DuelScreen() {
                         opponentCards={duelResult.opponentCards || []}
                         outcome={duelResult.outcome}
                         onComplete={handleCardRevealComplete}
+                        yourPlayedZombie={duelResult.yourPlayedZombie}
+                        opponentPlayedZombie={duelResult.opponentPlayedZombie}
+                        yourPlayedVaccine={duelResult.yourPlayedVaccine}
+                        opponentPlayedVaccine={duelResult.opponentPlayedVaccine}
                     />
                 )}
 

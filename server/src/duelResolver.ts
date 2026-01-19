@@ -254,6 +254,12 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
     result.p1PlayedCards = getPlayedCards(action1, player1);
     result.p2PlayedCards = getPlayedCards(action2, player2);
 
+    // Track special cards played (for reveal animation)
+    result.p1PlayedZombie = action1.actionType === 'zombie' || action1.actionType === 'zombie_with_numbers';
+    result.p2PlayedZombie = action2.actionType === 'zombie' || action2.actionType === 'zombie_with_numbers';
+    result.p1PlayedVaccine = action1.actionType === 'vaccine';
+    result.p2PlayedVaccine = action2.actionType === 'vaccine';
+
     // Track card consumption
     let p1CardUsed = false;
     let p2CardUsed = false;
@@ -634,6 +640,12 @@ export function getDuelResultPrivate(
     // Determine if zombie card was revealed (opponent infected this player)
     const zombieCardRevealed = result.zombieCardRevealed && result.infections.includes(playerId);
 
+    // Get special cards played by each player
+    const yourPlayedZombie = isPlayer1 ? result.p1PlayedZombie : result.p2PlayedZombie;
+    const opponentPlayedZombie = isPlayer1 ? result.p2PlayedZombie : result.p1PlayedZombie;
+    const yourPlayedVaccine = isPlayer1 ? result.p1PlayedVaccine : result.p2PlayedVaccine;
+    const opponentPlayedVaccine = isPlayer1 ? result.p2PlayedVaccine : result.p1PlayedVaccine;
+
     return {
         outcome,
         cardStolen,
@@ -650,6 +662,10 @@ export function getDuelResultPrivate(
         yourCards,
         opponentCards,
         zombieCardRevealed,
+        yourPlayedZombie,
+        opponentPlayedZombie,
+        yourPlayedVaccine,
+        opponentPlayedVaccine,
     };
 }
 

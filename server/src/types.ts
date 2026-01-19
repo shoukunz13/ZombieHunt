@@ -90,6 +90,10 @@ export interface DuelResult {
     p1PlayedCards?: NumberCard[]; // Cards player1 played (for reveal animation)
     p2PlayedCards?: NumberCard[]; // Cards player2 played (for reveal animation)
     zombieCardRevealed?: boolean; // True if zombie won and revealed their card to infect
+    p1PlayedZombie?: boolean; // True if player1 played a zombie card
+    p2PlayedZombie?: boolean; // True if player2 played a zombie card
+    p1PlayedVaccine?: boolean; // True if player1 played a vaccine card
+    p2PlayedVaccine?: boolean; // True if player2 played a vaccine card
 }
 
 export type DuelStatus = 'pending' | 'in_progress' | 'resolved';
@@ -227,6 +231,10 @@ export interface DuelResultPrivate {
     yourCards?: NumberCard[]; // Cards you played (for reveal animation)
     opponentCards?: NumberCard[]; // Cards opponent played (for reveal animation)
     zombieCardRevealed?: boolean; // If true, show zombie card reveal animation (opponent infected you)
+    yourPlayedZombie?: boolean; // True if you played a zombie card
+    opponentPlayedZombie?: boolean; // True if opponent played a zombie card
+    yourPlayedVaccine?: boolean; // True if you played a vaccine card
+    opponentPlayedVaccine?: boolean; // True if opponent played a vaccine card
 }
 
 export interface GameStatePublic {
