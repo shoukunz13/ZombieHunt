@@ -914,6 +914,14 @@ function checkAnnihilation(io: Server, game: GameState): boolean {
 
 /**
  * Check if all alive players have completed their duels, transition to meeting if so
+ * 
+ * Logic: Round is complete when:
+ * 1. No players are currently in duels (activeDuels === 0)
+ * 2. At most 1 unpaired player remains (the odd one out for odd player counts)
+ * 
+ * An "unpaired" player is one who hasn't completed a duel this round:
+ * - isPaired=false means they haven't started any duel
+ * - currentDuelId !== null means they're currently in a duel
  */
 function checkRoundComplete(io: Server, game: GameState): void {
     const alivePlayers = getAlivePlayers(game);
@@ -936,37 +944,40 @@ function checkRoundComplete(io: Server, game: GameState): void {
         return;
     }
 
-    // Count players sitting out this round (after successfully shooting a zombie)
-    const sittingOutCount = alivePlayers.filter(p => p.sittingOutRound === game.round).length;
+    // Players sitting out this round (after successfully shooting a zombie)
+    const sittingOutPlayers = alivePlayers.filter(p => p.sittingOutRound === game.round);
 
-    // Eligible duelers = alive players minus those sitting out
-    const eligibleDuelers = alivePlayers.length - sittingOutCount;
+    // Eligible players (can duel this round)
+    const eligiblePlayers = alivePlayers.filter(p => p.sittingOutRound !== game.round);
 
-    // Expected number of duels: each duel involves 2 players, odd player doesn't duel
-    const expectedDuels = Math.floor(eligibleDuelers / 2);
+    // Count players currently IN a duel (currentDuelId is set)
+    const playersInDuel = eligiblePlayers.filter(p => p.currentDuelId !== null);
 
-    // Count duels that have been resolved this round
-    const resolvedDuels = game.currentRoundDuels.filter(duelId => {
-        const duel = game.duels.get(duelId);
-        return duel && duel.status === 'resolved';
-    }).length;
+    // Count unpaired players who haven't started/completed a duel yet
+    // isPaired=false means they haven't entered any duel this round
+    const unpairedPlayers = eligiblePlayers.filter(p => !p.isPaired && p.currentDuelId === null);
 
-    // Count duels that are still in progress
-    const activeDuels = game.currentRoundDuels.filter(duelId => {
-        const duel = game.duels.get(duelId);
-        return duel && duel.status === 'in_progress';
-    }).length;
+    // Count players who completed their duel (isPaired=true AND currentDuelId=null)
+    const completedPlayers = eligiblePlayers.filter(p => p.isPaired && p.currentDuelId === null);
 
-    // Total duels created this round
-    const totalDuelsCreated = game.currentRoundDuels.length;
+    console.log(`[checkRoundComplete] alive=${alivePlayers.length}, sitting=${sittingOutPlayers.length}, eligible=${eligiblePlayers.length}`);
+    console.log(`[checkRoundComplete] inDuel=${playersInDuel.length}, unpaired=${unpairedPlayers.length}, completed=${completedPlayers.length}`);
+    console.log(`[checkRoundComplete] Players:`, eligiblePlayers.map(p => ({
+        name: p.name,
+        isPaired: p.isPaired,
+        status: p.status,
+        duelId: p.currentDuelId
+    })));
 
-    console.log(`[checkRoundComplete] alive=${alivePlayers.length}, sittingOut=${sittingOutCount}, eligibleDuelers=${eligibleDuelers}, expectedDuels=${expectedDuels}`);
-    console.log(`[checkRoundComplete] resolvedDuels=${resolvedDuels}, activeDuels=${activeDuels}, totalCreated=${totalDuelsCreated}`);
-    console.log(`[checkRoundComplete] Players:`, alivePlayers.map(p => ({ name: p.name, isPaired: p.isPaired, duelId: p.currentDuelId, sittingOut: p.sittingOutRound === game.round })));
+    // Round is complete when:
+    // 1. No active duels (no one in the middle of fighting)
+    // 2. At most 1 unpaired player (handles odd player count - that player is "safe" this round)
+    // 3. At least some duels happened (eligiblePlayers > 1 means duels should occur)
+    const noActiveDuels = playersInDuel.length === 0;
+    const allPairedOrOddOneOut = unpairedPlayers.length <= 1;
+    const duelsHappened = completedPlayers.length > 0;
 
-    // Transition when: all expected duels are resolved AND no active duels remain
-    // expectedDuels can be 0 if only 1 eligible player or 0 eligible (all sitting out)
-    if (resolvedDuels >= expectedDuels && activeDuels === 0 && expectedDuels > 0) {
+    if (noActiveDuels && allPairedOrOddOneOut && duelsHappened) {
         console.log('[checkRoundComplete] Transitioning to meeting phase!');
         // Transition to meeting phase
         startMeetingPhase(game);
