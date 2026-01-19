@@ -23,10 +23,14 @@ export function EliminatedScreen() {
 
     const [showShotgunAnimation, setShowShotgunAnimation] = useState(false);
 
-    // Check if this is a shotgun death and show animation
+    // Check if this is a death that should show the laser animation
+    // (shotgun kills or running out of cards)
     useEffect(() => {
-        if (isEliminated && eliminationReason?.toLowerCase().includes('shotgun')) {
-            setShowShotgunAnimation(true);
+        if (isEliminated && eliminationReason) {
+            const reason = eliminationReason.toLowerCase();
+            if (reason.includes('shotgun') || reason.includes('cards') || reason.includes('ran out')) {
+                setShowShotgunAnimation(true);
+            }
         }
     }, [isEliminated, eliminationReason]);
 

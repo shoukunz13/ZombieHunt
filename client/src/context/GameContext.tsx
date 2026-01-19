@@ -290,6 +290,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
             // Clear elimination state so killed players can rejoin
             setIsEliminated(false);
             setEliminationReason(null);
+            // Clear duel state so card flip screen doesn't appear
+            setCurrentDuel(null);
+            setDuelResult(null);
         });
 
         setSocket(newSocket);

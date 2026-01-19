@@ -583,12 +583,22 @@ function handleHostRevealComplete(io: Server, socket: Socket): void {
     // Now send game_ended to all players
     for (const player of game.players.values()) {
         if (player.socketId) {
+            // Eliminated players always lose, regardless of team outcome
+            let yourOutcome: 'won' | 'lost' | 'tie';
+            if (player.status === 'eliminated') {
+                yourOutcome = 'lost';
+            } else if (finalReveal.winnerSide === 'tie') {
+                yourOutcome = 'tie';
+            } else if ((player.role === 'human' && finalReveal.winnerSide === 'humans') ||
+                (player.role === 'zombie' && finalReveal.winnerSide === 'zombies')) {
+                yourOutcome = 'won';
+            } else {
+                yourOutcome = 'lost';
+            }
+
             io.to(player.socketId).emit('game_ended', {
                 finalReveal,
-                yourOutcome: finalReveal.winnerSide === 'tie' ? 'tie'
-                    : (player.role === 'human' && finalReveal.winnerSide === 'humans') ||
-                        (player.role === 'zombie' && finalReveal.winnerSide === 'zombies')
-                        ? 'won' : 'lost',
+                yourOutcome,
             });
         }
     }
