@@ -203,19 +203,35 @@ export function CardRevealAnimation({
             const createSpecialCardFace = (cardType: 'zombie' | 'vaccine') => {
                 const card = new Container();
                 const isZombie = cardType === 'zombie';
-                const bgColor = isZombie ? 0x1a4d2e : 0x1e3a5f;
-                const textColor = isZombie ? 0x4ade80 : 0x60a5fa;
+
+                // More vibrant, distinctive colors
+                const bgColor = isZombie ? 0x0f2818 : 0x0a1628; // Darker backgrounds
+                const glowColor = isZombie ? 0x22c55e : 0x3b82f6; // Bright green / bright blue
+                const textColor = isZombie ? 0x86efac : 0x93c5fd; // Light green / light blue
 
                 const bg = new Graphics();
                 bg.roundRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 8);
                 bg.fill(bgColor);
-                bg.stroke({ color: textColor, width: 2 });
+
+                // Add glowing border effect
+                bg.stroke({ color: glowColor, width: 3 });
+
+                // Add inner glow
+                const innerGlow = new Graphics();
+                innerGlow.roundRect(-CARD_WIDTH / 2 + 4, -CARD_HEIGHT / 2 + 4, CARD_WIDTH - 8, CARD_HEIGHT - 8, 6);
+                innerGlow.stroke({ color: glowColor, width: 1, alpha: 0.5 });
 
                 const symbolStyle = new TextStyle({
                     fontFamily: 'Courier New, monospace',
-                    fontSize: 32,
+                    fontSize: 36,
                     fontWeight: 'bold',
                     fill: textColor,
+                    dropShadow: {
+                        color: glowColor,
+                        blur: 8,
+                        distance: 0,
+                        alpha: 0.8,
+                    },
                 });
 
                 const symbol = new Text({
@@ -223,12 +239,14 @@ export function CardRevealAnimation({
                     style: symbolStyle
                 });
                 symbol.anchor.set(0.5);
-                symbol.y = -10;
+                symbol.y = -12;
 
                 const labelStyle = new TextStyle({
                     fontFamily: 'Courier New, monospace',
-                    fontSize: 10,
+                    fontSize: 11,
+                    fontWeight: 'bold',
                     fill: textColor,
+                    letterSpacing: 1,
                 });
 
                 const label = new Text({
@@ -236,9 +254,9 @@ export function CardRevealAnimation({
                     style: labelStyle
                 });
                 label.anchor.set(0.5);
-                label.y = 25;
+                label.y = 28;
 
-                card.addChild(bg, symbol, label);
+                card.addChild(bg, innerGlow, symbol, label);
                 return card;
             };
 

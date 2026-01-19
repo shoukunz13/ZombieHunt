@@ -254,9 +254,8 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
     result.p1PlayedCards = getPlayedCards(action1, player1);
     result.p2PlayedCards = getPlayedCards(action2, player2);
 
-    // Track special cards played (for reveal animation)
-    result.p1PlayedZombie = action1.actionType === 'zombie' || action1.actionType === 'zombie_with_numbers';
-    result.p2PlayedZombie = action2.actionType === 'zombie' || action2.actionType === 'zombie_with_numbers';
+    // Track vaccine cards played (always visible)
+    // Zombie cards will only be tracked if zombie wins (to maintain anonymity)
     result.p1PlayedVaccine = action1.actionType === 'vaccine';
     result.p2PlayedVaccine = action2.actionType === 'vaccine';
 
@@ -377,6 +376,8 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 infectPlayer(game, player2.id);
                 result.infections.push(player2.id);
                 player1.infectionCount++;
+                // Reveal zombie card since they won
+                result.p1PlayedZombie = true;
 
                 // Remove played number cards from player 2
                 if (action2.actionType === 'number') {
@@ -422,6 +423,8 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 infectPlayer(game, player1.id);
                 result.infections.push(player1.id);
                 player2.infectionCount++;
+                // Reveal zombie card since they won
+                result.p2PlayedZombie = true;
 
                 // Remove played number cards from player 1
                 if (action1.actionType === 'number') {
@@ -502,6 +505,8 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 player1.infectionCount++;
                 result.zombieCardRevealed = true;
             }
+            // Reveal zombie card since they won
+            result.p1PlayedZombie = true;
         } else if (sum2 > sum1) {
             // Human wins - zombie loses cards, no infection
             result.winnerId = player2.id;
@@ -540,6 +545,8 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 player2.infectionCount++;
                 result.zombieCardRevealed = true;
             }
+            // Reveal zombie card since they won
+            result.p2PlayedZombie = true;
         } else if (sum1 > sum2) {
             // Human wins - zombie loses cards, no infection
             result.winnerId = player1.id;
