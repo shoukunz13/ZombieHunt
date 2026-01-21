@@ -19,6 +19,8 @@ interface CardRevealAnimationProps {
     opponentPlayedZombie?: boolean;
     yourPlayedVaccine?: boolean;
     opponentPlayedVaccine?: boolean;
+    yourPlayedShotgun?: boolean;
+    opponentPlayedShotgun?: boolean;
 }
 
 const CARD_WIDTH = 70;
@@ -36,7 +38,9 @@ export function CardRevealAnimation({
     yourPlayedZombie = false,
     opponentPlayedZombie = false,
     yourPlayedVaccine = false,
-    opponentPlayedVaccine = false
+    opponentPlayedVaccine = false,
+    yourPlayedShotgun = false,
+    opponentPlayedShotgun = false
 }: CardRevealAnimationProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
@@ -199,24 +203,38 @@ export function CardRevealAnimation({
                 return card;
             };
 
-            // Create special card face (zombie or vaccine)
-            const createSpecialCardFace = (cardType: 'zombie' | 'vaccine') => {
+            // Create special card face (zombie, vaccine, or shotgun)
+            const createSpecialCardFace = (cardType: 'zombie' | 'vaccine' | 'shotgun') => {
                 const card = new Container();
-                const isZombie = cardType === 'zombie';
 
-                // More vibrant, distinctive colors
-                const bgColor = isZombie ? 0x0f2818 : 0x0a1628; // Darker backgrounds
-                const glowColor = isZombie ? 0x22c55e : 0x3b82f6; // Bright green / bright blue
-                const textColor = isZombie ? 0x86efac : 0x93c5fd; // Light green / light blue
+                // Color configuration based on card type
+                let bgColor: number, glowColor: number, textColor: number, symbolChar: string, labelText: string;
+
+                if (cardType === 'zombie') {
+                    bgColor = 0x0f2818;
+                    glowColor = 0x22c55e;
+                    textColor = 0x86efac;
+                    symbolChar = '☠';
+                    labelText = 'INFECT';
+                } else if (cardType === 'vaccine') {
+                    bgColor = 0x0a1628;
+                    glowColor = 0x3b82f6;
+                    textColor = 0x93c5fd;
+                    symbolChar = '✚';
+                    labelText = 'CURE';
+                } else {
+                    bgColor = 0x2a1a0a;
+                    glowColor = 0xf97316;
+                    textColor = 0xfed7aa;
+                    symbolChar = '×';
+                    labelText = 'SHOTGUN';
+                }
 
                 const bg = new Graphics();
                 bg.roundRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 8);
                 bg.fill(bgColor);
-
-                // Add glowing border effect
                 bg.stroke({ color: glowColor, width: 3 });
 
-                // Add inner glow
                 const innerGlow = new Graphics();
                 innerGlow.roundRect(-CARD_WIDTH / 2 + 4, -CARD_HEIGHT / 2 + 4, CARD_WIDTH - 8, CARD_HEIGHT - 8, 6);
                 innerGlow.stroke({ color: glowColor, width: 1, alpha: 0.5 });
@@ -226,33 +244,22 @@ export function CardRevealAnimation({
                     fontSize: 36,
                     fontWeight: 'bold',
                     fill: textColor,
-                    dropShadow: {
-                        color: glowColor,
-                        blur: 8,
-                        distance: 0,
-                        alpha: 0.8,
-                    },
+                    dropShadow: { color: glowColor, blur: 8, distance: 0, alpha: 0.8 },
                 });
 
-                const symbol = new Text({
-                    text: isZombie ? '☠' : '✚',
-                    style: symbolStyle
-                });
+                const symbol = new Text({ text: symbolChar, style: symbolStyle });
                 symbol.anchor.set(0.5);
                 symbol.y = -12;
 
                 const labelStyle = new TextStyle({
                     fontFamily: 'Courier New, monospace',
-                    fontSize: 11,
+                    fontSize: cardType === 'shotgun' ? 9 : 11,
                     fontWeight: 'bold',
                     fill: textColor,
                     letterSpacing: 1,
                 });
 
-                const label = new Text({
-                    text: isZombie ? 'INFECT' : 'CURE',
-                    style: labelStyle
-                });
+                const label = new Text({ text: labelText, style: labelStyle });
                 label.anchor.set(0.5);
                 label.y = 28;
 
@@ -265,14 +272,16 @@ export function CardRevealAnimation({
                 cards: NumberCard[],
                 row: Container,
                 hasZombie: boolean,
-                hasVaccine: boolean
+                hasVaccine: boolean,
+                hasShotgun: boolean
             ) => {
                 // Build array of all cards to display (special cards first, then number cards)
-                type CardItem = { type: 'number'; card: NumberCard } | { type: 'zombie' } | { type: 'vaccine' };
+                type CardItem = { type: 'number'; card: NumberCard } | { type: 'zombie' } | { type: 'vaccine' } | { type: 'shotgun' };
                 const allCards: CardItem[] = [];
 
                 if (hasZombie) allCards.push({ type: 'zombie' });
                 if (hasVaccine) allCards.push({ type: 'vaccine' });
+                if (hasShotgun) allCards.push({ type: 'shotgun' });
                 cards.forEach(card => allCards.push({ type: 'number', card }));
 
                 const totalWidth = allCards.length * CARD_WIDTH + (allCards.length - 1) * CARD_GAP;
@@ -299,8 +308,8 @@ export function CardRevealAnimation({
                 });
             };
 
-            const yourCardObjs = positionCards(yourCards, yourRow, yourPlayedZombie, yourPlayedVaccine);
-            const opponentCardObjs = positionCards(opponentCards, opponentRow, opponentPlayedZombie, opponentPlayedVaccine);
+            const yourCardObjs = positionCards(yourCards, yourRow, yourPlayedZombie, yourPlayedVaccine, yourPlayedShotgun);
+            const opponentCardObjs = positionCards(opponentCards, opponentRow, opponentPlayedZombie, opponentPlayedVaccine, opponentPlayedShotgun);
 
             // Flip animation
             const flipCard = (back: Container, face: Container): Promise<void> => {

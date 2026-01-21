@@ -209,6 +209,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
                 phase: data.phase,
                 round: data.round,
                 phaseEndsAt: data.endsAt,
+                requireZombieWin: data.requireZombieWin ?? prev.requireZombieWin, // Update competitive setting from server
             } : null);
 
             // Reset duel state on phase change

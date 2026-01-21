@@ -266,6 +266,7 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
     // Priority 1: Handle shotguns first
     if (action1.actionType === 'shotgun') {
         player1.hasShotgun = false;
+        result.p1PlayedShotgun = true; // Track that player1 used shotgun
         if (player2.role === 'zombie') {
             result.shotgunKills.push(player2.id);
             result.eliminations.push(player2.id);
@@ -275,13 +276,14 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             // Shooter sits out next round
             player1.sittingOutRound = game.round + 1;
         } else {
-            // Wasted on human
+            // Wasted on human - shotgun card will be revealed
             addEvent(game, 'shotgun_fired', 'A shotgun was fired (wasted)');
         }
     }
 
     if (action2.actionType === 'shotgun') {
         player2.hasShotgun = false;
+        result.p2PlayedShotgun = true; // Track that player2 used shotgun
         if (player1.role === 'zombie') {
             result.shotgunKills.push(player1.id);
             result.eliminations.push(player1.id);
@@ -291,7 +293,7 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             // Shooter sits out next round
             player2.sittingOutRound = game.round + 1;
         } else {
-            // Wasted on human
+            // Wasted on human - shotgun card will be revealed
             addEvent(game, 'shotgun_fired', 'A shotgun was fired (wasted)');
         }
     }
@@ -350,7 +352,14 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
     const p1CanInfect = maxInfections === 0 || player1.infectionCount < maxInfections;
     const p2CanInfect = maxInfections === 0 || player2.infectionCount < maxInfections;
 
-    if (p1PlayedZombie && !p2PlayedZombie && action2.actionType !== 'vaccine') {
+    if (p1PlayedZombie && p2PlayedZombie) {
+        // Both zombies played zombie cards at the same time - draw, no effect
+        // Reveal both zombie cards in animation
+        result.p1PlayedZombie = true;
+        result.p2PlayedZombie = true;
+        result.zombieVsZombie = true;
+        addEvent(game, 'betrayal', 'Two zombies revealed themselves to each other!');
+    } else if (p1PlayedZombie && !p2PlayedZombie && action2.actionType !== 'vaccine') {
         if (player2.role === 'zombie') {
             // Zombie attacking Zombie -> Punishment!
             const lostCard = getRandomStealableCard(player1.numberCards, 'random_any');
@@ -360,9 +369,8 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 addEvent(game, 'betrayal', 'A zombie attacked another zombie and lost a card!');
             }
             result.zombieVsZombie = true;
-            // Reveal both zombie cards
+            // Reveal the attacking zombie's card only
             result.p1PlayedZombie = true;
-            result.p2PlayedZombie = true;
         } else if (p1CanInfect) {
             // Check if requireZombieWin mode is enabled
             if (game.settings.requireZombieWin && action2.actionType === 'number') {
@@ -413,8 +421,7 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 addEvent(game, 'betrayal', 'A zombie attacked another zombie and lost a card!');
             }
             result.zombieVsZombie = true;
-            // Reveal both zombie cards
-            result.p1PlayedZombie = true;
+            // Reveal the attacking zombie's card only
             result.p2PlayedZombie = true;
         } else if (p2CanInfect) {
             // Check if requireZombieWin mode is enabled
@@ -699,6 +706,8 @@ export function getDuelResultPrivate(
         opponentCured,
         vaccineWasted,
         zombieVsZombie,
+        yourPlayedShotgun: isPlayer1 ? result.p1PlayedShotgun : result.p2PlayedShotgun,
+        opponentPlayedShotgun: isPlayer1 ? result.p2PlayedShotgun : result.p1PlayedShotgun,
     };
 }
 

@@ -761,6 +761,7 @@ function broadcastPhaseChange(io: Server, game: GameState): void {
         phase: game.phase,
         round: game.round,
         endsAt: game.phaseEndsAt,
+        requireZombieWin: game.settings.requireZombieWin, // Include setting for competitive mode
     });
 
     // If duel phase, send duel assignments

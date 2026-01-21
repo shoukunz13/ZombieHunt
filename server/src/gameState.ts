@@ -681,6 +681,7 @@ export function getGameStatePublic(game: GameState): GameStatePublic {
         phaseEndsAt: game.phaseEndsAt,
         playerCount: game.players.size,
         alivePlayerCount: alivePlayers.length,
+        requireZombieWin: game.settings.requireZombieWin,
     };
 }
 

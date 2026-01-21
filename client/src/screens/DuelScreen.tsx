@@ -218,6 +218,23 @@ export function DuelScreen() {
             return;
         }
 
+        // Non-competitive zombie mode: zombie card only (no number cards needed)
+        // Only allowed when requireZombieWin is OFF
+        const requireZombieWin = gameState?.requireZombieWin ?? false;
+        if (infectSelected && selectedCardIds.length === 0 && !requireZombieWin) {
+            console.log('[handleConfirm] Submitting zombie-only action (non-competitive mode)');
+            submitAction('zombie');
+            setInfectSelected(false);
+            setSelectedAction(null);
+            return;
+        }
+
+        // If competitive mode is ON and no cards selected with infect, block submission
+        if (infectSelected && selectedCardIds.length === 0 && requireZombieWin) {
+            console.log('[handleConfirm] Blocked: competitive mode requires cards with zombie');
+            return;
+        }
+
         if (!selectedAction) {
             console.log('[handleConfirm] No selectedAction, returning');
             return;
@@ -268,10 +285,13 @@ export function DuelScreen() {
     // Can confirm if:
     // - Standard special action selected (vaccine/shotgun), OR
     // - Number cards selected (and no infect selected), OR
-    // - Infect selected AND cards selected (competitive zombie mode)
+    // - Infect selected AND cards selected (competitive zombie mode), OR
+    // - Infect selected alone (non-competitive mode - zombie card only)
+    const requireZombieWin = gameState?.requireZombieWin ?? false;
     const canConfirm = (selectedAction && selectedAction !== 'number') ||
         (selectedAction === 'number' && selectedCardIds.length > 0) ||
-        (infectSelected && selectedCardIds.length > 0);
+        (infectSelected && selectedCardIds.length > 0) ||
+        (infectSelected && !requireZombieWin); // Allow zombie-only when competitive mode OFF
 
     // Check if a card can be selected (must be same suit as already selected)
     const canSelectCard = (card: NumberCard): boolean => {
@@ -638,6 +658,8 @@ export function DuelScreen() {
                         opponentPlayedZombie={duelResult.opponentPlayedZombie}
                         yourPlayedVaccine={duelResult.yourPlayedVaccine}
                         opponentPlayedVaccine={duelResult.opponentPlayedVaccine}
+                        yourPlayedShotgun={duelResult.yourPlayedShotgun}
+                        opponentPlayedShotgun={duelResult.opponentPlayedShotgun}
                     />
                 )}
 
