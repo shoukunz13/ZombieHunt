@@ -286,6 +286,9 @@ export function DuelScreen() {
         if (duelResult.infected) return 'infected';
         if (duelResult.youEliminated) return 'eliminated';
         if (duelResult.cured) return 'cured';
+        if (duelResult.opponentCured) return 'cured'; // Same style for curing opponent
+        if (duelResult.vaccineWasted) return 'defeat'; // Wasted vaccine is a loss
+        if (duelResult.zombieVsZombie) return 'infected'; // Betrayal uses red theme
         if (duelResult.shotgunUsed && duelResult.shotgunResult === 'killed_zombie') return 'shotgun-kill victory';
         if (duelResult.outcome === 'win') return 'victory';
         if (duelResult.outcome === 'lose') return 'defeat';
@@ -297,6 +300,9 @@ export function DuelScreen() {
         if (duelResult.infected) return '☠';
         if (duelResult.youEliminated) return '✕';
         if (duelResult.cured) return '✚';
+        if (duelResult.opponentCured) return '✚';
+        if (duelResult.vaccineWasted) return '✕';
+        if (duelResult.zombieVsZombie) return '☠';
         if (duelResult.shotgunUsed && duelResult.shotgunResult === 'killed_zombie') return '×';
         if (duelResult.outcome === 'win') return '▲';
         if (duelResult.outcome === 'lose') return '▼';
@@ -308,6 +314,9 @@ export function DuelScreen() {
         if (duelResult.infected) return 'INFECTED';
         if (duelResult.youEliminated) return 'ELIMINATED';
         if (duelResult.cured) return 'CURED';
+        if (duelResult.opponentCured) return 'OPPONENT CURED';
+        if (duelResult.vaccineWasted) return 'VACCINE WASTED';
+        if (duelResult.zombieVsZombie) return 'BETRAYAL';
         if (duelResult.shotgunUsed && duelResult.shotgunResult === 'killed_zombie') return 'TARGET DOWN';
         if (duelResult.outcome === 'win') return 'VICTORY';
         if (duelResult.outcome === 'lose') return 'DEFEAT';
@@ -319,6 +328,9 @@ export function DuelScreen() {
         if (duelResult.infected) return 'YOU HAVE BECOME ONE OF THEM';
         if (duelResult.youEliminated) return 'YOUR GAME IS OVER';
         if (duelResult.cured) return 'THE INFECTION HAS BEEN PURGED';
+        if (duelResult.opponentCured) return 'YOUR VACCINE PURIFIED THE ENEMY';
+        if (duelResult.vaccineWasted) return 'TARGET WAS HUMAN — VACCINE LOST';
+        if (duelResult.zombieVsZombie) return 'YOU ATTACKED YOUR OWN KIND';
         if (duelResult.shotgunUsed && duelResult.shotgunResult === 'killed_zombie') return 'THREAT NEUTRALIZED';
         if (duelResult.shotgunUsed && duelResult.shotgunResult === 'wasted_on_human') return 'WRONG TARGET — WASTED SHOT';
         return '';

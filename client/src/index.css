@@ -824,6 +824,7 @@ body {
   z-index: 2000;
   padding: var(--space-xl);
   animation: result-appear 0.5s ease-out;
+  background: var(--bg-primary);
 }
 
 @keyframes result-appear {

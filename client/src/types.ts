@@ -73,6 +73,9 @@ export interface DuelResultPrivate {
     opponentPlayedZombie?: boolean; // True if opponent played a zombie card
     yourPlayedVaccine?: boolean; // True if you played a vaccine card
     opponentPlayedVaccine?: boolean; // True if opponent played a vaccine card
+    opponentCured?: boolean; // True if your vaccine cured the opponent
+    vaccineWasted?: boolean; // True if vaccine was used on a human (wasted)
+    zombieVsZombie?: boolean; // True if zombie attacked another zombie
 }
 
 export interface PlayerPrivate {

@@ -94,6 +94,11 @@ export interface DuelResult {
     p2PlayedZombie?: boolean; // True if player2 played a zombie card
     p1PlayedVaccine?: boolean; // True if player1 played a vaccine card
     p2PlayedVaccine?: boolean; // True if player2 played a vaccine card
+    p1CuredOpponent?: boolean; // True if player1's vaccine cured player2
+    p2CuredOpponent?: boolean; // True if player2's vaccine cured player1
+    p1VaccineWasted?: boolean; // True if player1's vaccine was wasted (on human)
+    p2VaccineWasted?: boolean; // True if player2's vaccine was wasted (on human)
+    zombieVsZombie?: boolean; // True if zombie attacked another zombie
 }
 
 export type DuelStatus = 'pending' | 'in_progress' | 'resolved';
@@ -235,6 +240,9 @@ export interface DuelResultPrivate {
     opponentPlayedZombie?: boolean; // True if opponent played a zombie card
     yourPlayedVaccine?: boolean; // True if you played a vaccine card
     opponentPlayedVaccine?: boolean; // True if opponent played a vaccine card
+    opponentCured?: boolean; // True if your vaccine cured the opponent
+    vaccineWasted?: boolean; // True if vaccine was used on a human (wasted)
+    zombieVsZombie?: boolean; // True if zombie attacked another zombie
 }
 
 export interface GameStatePublic {

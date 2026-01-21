@@ -313,7 +313,12 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 curePlayer(game, player2.id);
                 result.cures.push(player2.id);
                 addEvent(game, 'cure', 'A player was cured');
+                result.p1CuredOpponent = true;
             }
+            p1CardUsed = true;
+        } else {
+            // Vaccine used on a human - wasted
+            result.p1VaccineWasted = true;
             p1CardUsed = true;
         }
     }
@@ -326,7 +331,12 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 curePlayer(game, player1.id);
                 result.cures.push(player1.id);
                 addEvent(game, 'cure', 'A player was cured');
+                result.p2CuredOpponent = true;
             }
+            p2CardUsed = true;
+        } else {
+            // Vaccine used on a human - wasted
+            result.p2VaccineWasted = true;
             p2CardUsed = true;
         }
     }
@@ -349,6 +359,10 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 result.cardLost = lostCard;
                 addEvent(game, 'betrayal', 'A zombie attacked another zombie and lost a card!');
             }
+            result.zombieVsZombie = true;
+            // Reveal both zombie cards
+            result.p1PlayedZombie = true;
+            result.p2PlayedZombie = true;
         } else if (p1CanInfect) {
             // Check if requireZombieWin mode is enabled
             if (game.settings.requireZombieWin && action2.actionType === 'number') {
@@ -398,6 +412,10 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
                 result.cardLost = lostCard;
                 addEvent(game, 'betrayal', 'A zombie attacked another zombie and lost a card!');
             }
+            result.zombieVsZombie = true;
+            // Reveal both zombie cards
+            result.p1PlayedZombie = true;
+            result.p2PlayedZombie = true;
         } else if (p2CanInfect) {
             // Check if requireZombieWin mode is enabled
             if (game.settings.requireZombieWin && action1.actionType === 'number') {
@@ -653,6 +671,11 @@ export function getDuelResultPrivate(
     const yourPlayedVaccine = isPlayer1 ? result.p1PlayedVaccine : result.p2PlayedVaccine;
     const opponentPlayedVaccine = isPlayer1 ? result.p2PlayedVaccine : result.p1PlayedVaccine;
 
+    // Get cure/vaccine outcome info
+    const opponentCured = isPlayer1 ? result.p1CuredOpponent : result.p2CuredOpponent;
+    const vaccineWasted = isPlayer1 ? result.p1VaccineWasted : result.p2VaccineWasted;
+    const zombieVsZombie = result.zombieVsZombie;
+
     return {
         outcome,
         cardStolen,
@@ -673,6 +696,9 @@ export function getDuelResultPrivate(
         opponentPlayedZombie,
         yourPlayedVaccine,
         opponentPlayedVaccine,
+        opponentCured,
+        vaccineWasted,
+        zombieVsZombie,
     };
 }
 
