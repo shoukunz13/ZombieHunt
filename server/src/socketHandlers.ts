@@ -746,11 +746,13 @@ function broadcastLobbyUpdate(io: Server, game: GameState): void {
         playersPublic.push(getPlayerPublic(player, game));
     }
 
+    const alivePlayers = Array.from(game.players.values()).filter(p => p.status === 'alive');
+
     io.to(game.gameCode).emit('lobby_update', {
         playersPublic,
         pairingStatus: {
-            totalPlayers: game.players.size,
-            pairedCount: Array.from(game.players.values()).filter(p => p.isPaired).length,
+            totalPlayers: alivePlayers.length,
+            pairedCount: alivePlayers.filter(p => p.isPaired).length,
             allPaired: allPlayersPaired(game),
         },
     });

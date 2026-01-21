@@ -332,7 +332,7 @@ export function LobbyScreen() {
                         textAlign: 'center'
                     }}>
                         <SystemMessage>
-                            {players.length} PARTICIPANTS CONNECTED
+                            {players.filter(p => p.isAlive).length} PARTICIPANTS CONNECTED
                         </SystemMessage>
                         <button
                             className="btn btn-secondary"

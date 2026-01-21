@@ -278,7 +278,7 @@ function HostDashboardContent() {
                                 }
                             }}
                         >
-                            ⚡ APPLY RECOMMENDED ({hostState.players.length} players)
+                            ⚡ APPLY RECOMMENDED ({hostState.players.filter(p => p.status === 'alive').length} players)
                         </button>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
@@ -485,7 +485,7 @@ function HostDashboardContent() {
                 {/* Players */}
                 {hostState && hostState.players && (
                     <div className="host-section">
-                        <h3>PARTICIPANTS ({hostState.players.length})</h3>
+                        <h3>PARTICIPANTS ({hostState.players.filter(p => p.status === 'alive').length})</h3>
                         <div style={{
                             maxHeight: '200px',
                             overflowY: 'auto',
