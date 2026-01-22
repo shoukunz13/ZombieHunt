@@ -85,7 +85,7 @@ function validateAction(
     cardIds?: string[]
 ): { valid: boolean; error?: string } {
     switch (actionType) {
-        case 'number':
+        case 'number': {
             if (!cardIds || cardIds.length === 0) return { valid: false, error: 'Card ID required' };
             if (cardIds.length > 5) return { valid: false, error: 'Maximum 5 cards allowed' };
 
@@ -110,6 +110,7 @@ function validateAction(
             // all cards in their own hand must be same suit (already validated above)
             // No need to match opponent's suit
             return { valid: true };
+        }
 
         case 'zombie':
             if (!player.zombieCard) return { valid: false, error: 'No zombie card' };
@@ -123,7 +124,7 @@ function validateAction(
             if (!player.hasShotgun) return { valid: false, error: 'No shotgun' };
             return { valid: true };
 
-        case 'zombie_with_numbers':
+        case 'zombie_with_numbers': {
             // Competitive mode: zombie must play zombie card + number cards together
             if (!player.zombieCard) return { valid: false, error: 'No zombie card' };
             if (!cardIds || cardIds.length === 0) return { valid: false, error: 'Must play number cards with zombie card' };
@@ -146,6 +147,7 @@ function validateAction(
                 zombieCards.push(card);
             }
             return { valid: true };
+        }
 
         default:
             return { valid: false, error: 'Invalid action type' };
