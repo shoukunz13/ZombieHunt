@@ -957,11 +957,8 @@ function checkRoundComplete(io: Server, game: GameState): void {
         return;
     }
 
-    // Players sitting out this round (after successfully shooting a zombie)
-    const sittingOutPlayers = alivePlayers.filter(p => p.sittingOutRound === game.round);
-
-    // Eligible players (can duel this round)
-    const eligiblePlayers = alivePlayers.filter(p => p.sittingOutRound !== game.round);
+    // All alive players are eligible (sitting out rule removed)
+    const eligiblePlayers = alivePlayers;
 
     // Count players currently IN a duel (currentDuelId is set)
     const playersInDuel = eligiblePlayers.filter(p => p.currentDuelId !== null);
@@ -973,7 +970,7 @@ function checkRoundComplete(io: Server, game: GameState): void {
     // Count players who completed their duel (isPaired=true AND currentDuelId=null)
     const completedPlayers = eligiblePlayers.filter(p => p.isPaired && p.currentDuelId === null);
 
-    console.log(`[checkRoundComplete] alive=${alivePlayers.length}, sitting=${sittingOutPlayers.length}, eligible=${eligiblePlayers.length}`);
+    console.log(`[checkRoundComplete] alive=${alivePlayers.length}, eligible=${eligiblePlayers.length}`);
     console.log(`[checkRoundComplete] inDuel=${playersInDuel.length}, unpaired=${unpairedPlayers.length}, completed=${completedPlayers.length}`);
     console.log(`[checkRoundComplete] Players:`, eligiblePlayers.map(p => ({
         name: p.name,

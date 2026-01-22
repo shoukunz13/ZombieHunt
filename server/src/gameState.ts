@@ -365,11 +365,6 @@ export function selectOpponent(game: GameState, playerId: string, opponentId: st
     if (player.currentDuelId || opponent.currentDuelId) return { success: false }; // Already in duel
     if (playerId === opponentId) return { success: false };
 
-    // Check if either player is sitting out this round
-    if (player.sittingOutRound === game.round || opponent.sittingOutRound === game.round) {
-        return { success: false };
-    }
-
     // Check if opponent has already selected this player (mutual selection)
     if (opponent.selectedOpponentId === playerId) {
         // Mutual selection! Create duel immediately

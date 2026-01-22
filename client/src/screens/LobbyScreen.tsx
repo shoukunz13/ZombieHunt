@@ -300,11 +300,20 @@ export function LobbyScreen() {
                                 textAlign: 'center',
                                 padding: 'var(--space-xl)'
                             }}>
-                                <SystemMessage>
-                                    {gameState?.phase === 'waiting'
-                                        ? 'AWAITING PARTICIPANTS'
-                                        : 'NO TARGETS AVAILABLE'}
-                                </SystemMessage>
+                                {gameState?.phase === 'waiting' ? (
+                                    <SystemMessage>AWAITING PARTICIPANTS</SystemMessage>
+                                ) : (
+                                    <>
+                                        <p className="heading-display" style={{
+                                            fontSize: 'var(--font-size-xl)',
+                                            color: 'var(--accent-green)',
+                                            marginBottom: 'var(--space-md)'
+                                        }}>
+                                            ✓ SAFE THIS ROUND
+                                        </p>
+                                        <SystemMessage>ALL TARGETS UNAVAILABLE</SystemMessage>
+                                    </>
+                                )}
                             </div>
                         ) : (
                             <div className="player-list">

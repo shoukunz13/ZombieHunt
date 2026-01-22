@@ -273,8 +273,6 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             eliminatePlayer(game, player2.id, 'Killed by shotgun');
             addEvent(game, 'shotgun_fired', 'A shotgun was fired');
             addEvent(game, 'elimination', 'A player was eliminated');
-            // Shooter sits out next round
-            player1.sittingOutRound = game.round + 1;
         } else {
             // Wasted on human - shotgun card will be revealed
             addEvent(game, 'shotgun_fired', 'A shotgun was fired (wasted)');
@@ -290,8 +288,6 @@ export function resolveDuel(game: GameState, duel: Duel): DuelResult {
             eliminatePlayer(game, player1.id, 'Killed by shotgun');
             addEvent(game, 'shotgun_fired', 'A shotgun was fired');
             addEvent(game, 'elimination', 'A player was eliminated');
-            // Shooter sits out next round
-            player2.sittingOutRound = game.round + 1;
         } else {
             // Wasted on human - shotgun card will be revealed
             addEvent(game, 'shotgun_fired', 'A shotgun was fired (wasted)');
