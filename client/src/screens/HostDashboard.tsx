@@ -8,7 +8,7 @@
  * - Ceremonial endgame reveal
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useHost, HostProvider } from '../context/HostContext';
 import { ConnectionStatus, EventItem, DisplayTitle, SystemMessage } from '../components/shared';
 import { IntroVideo } from '../components/IntroVideo';
@@ -20,12 +20,19 @@ function HostDashboardContent() {
     const {
         isConnected, isAuthenticated, hostState, events, authError,
         currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer, endGame,
-        completeIntro, updateSettings
+        completeIntro, updateSettings, revealComplete, restartGame
     } = useHost();
 
     const [pin, setPin] = useState('');
     const [newGameCode, setNewGameCode] = useState('');
     const [showReveal, setShowReveal] = useState(true);
+
+    // Reset showReveal to true when game enters ended phase
+    useEffect(() => {
+        if (hostState?.phase === 'ended') {
+            setShowReveal(true);
+        }
+    }, [hostState?.phase]);
 
     // Helper to calculate slider background gradient for progress-fill effect
     const getSliderStyle = (value: number, min: number, max: number): React.CSSProperties => {
@@ -130,7 +137,10 @@ function HostDashboardContent() {
             {hostState?.phase === 'ended' && finalReveal && showReveal && (
                 <EndGameReveal
                     finalReveal={finalReveal}
-                    onComplete={() => setShowReveal(false)}
+                    onComplete={() => {
+                        revealComplete(); // Tell server to send results to players
+                        setShowReveal(false);
+                    }}
                 />
             )}
 
@@ -268,7 +278,7 @@ function HostDashboardContent() {
                                 }
                             }}
                         >
-                            ⚡ APPLY RECOMMENDED ({hostState.players.length} players)
+                            ⚡ APPLY RECOMMENDED ({hostState.players.filter(p => p.status === 'alive').length} players)
                         </button>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
@@ -375,6 +385,19 @@ function HostDashboardContent() {
                                     ANNIHILATION RULE (all zombies = everyone dies)
                                 </label>
                             </div>
+
+                            {/* Competitive Infection Toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                                <input
+                                    type="checkbox"
+                                    id="requireZombieWin"
+                                    checked={hostState.settings.requireZombieWin ?? false}
+                                    onChange={(e) => updateSettings({ requireZombieWin: e.target.checked })}
+                                />
+                                <label htmlFor="requireZombieWin" className="text-system">
+                                    COMPETITIVE INFECTION (zombie must beat opponent's cards to infect)
+                                </label>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -410,6 +433,13 @@ function HostDashboardContent() {
                             disabled={!hostState || hostState.phase !== 'meeting'}
                         >
                             NEXT ROUND
+                        </button>
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => restartGame()}
+                            disabled={!hostState || hostState.phase !== 'ended'}
+                        >
+                            PLAY AGAIN
                         </button>
                         <button
                             className="btn btn-danger"
@@ -455,7 +485,7 @@ function HostDashboardContent() {
                 {/* Players */}
                 {hostState && hostState.players && (
                     <div className="host-section">
-                        <h3>PARTICIPANTS ({hostState.players.length})</h3>
+                        <h3>PARTICIPANTS ({hostState.players.filter(p => p.status === 'alive').length})</h3>
                         <div style={{
                             maxHeight: '200px',
                             overflowY: 'auto',

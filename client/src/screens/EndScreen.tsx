@@ -7,13 +7,35 @@
  * - Winner announcement
  */
 
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { DisplayTitle, SystemMessage, Spinner } from '../components/shared';
 
 export function EndScreen() {
     const navigate = useNavigate();
-    const { privateState, finalReveal, yourOutcome } = useGame();
+    const {
+        privateState, finalReveal, yourOutcome,
+        lobbyDestroyed, clearLobbyDestroyed,
+        lobbyRestarted, clearLobbyRestarted,
+        leaveGame
+    } = useGame();
+
+    // Redirect to home if lobby was destroyed
+    useEffect(() => {
+        if (lobbyDestroyed) {
+            clearLobbyDestroyed();
+            navigate('/');
+        }
+    }, [lobbyDestroyed, clearLobbyDestroyed, navigate]);
+
+    // Auto-redirect to lobby when host clicks Play Again
+    useEffect(() => {
+        if (lobbyRestarted) {
+            clearLobbyRestarted();
+            navigate('/lobby');
+        }
+    }, [lobbyRestarted, clearLobbyRestarted, navigate]);
 
     if (!finalReveal) {
         return (
@@ -171,13 +193,31 @@ export function EndScreen() {
                     )}
                 </div>
 
-                {/* Play Again */}
-                <button
-                    className="btn btn-secondary"
-                    onClick={() => navigate('/')}
-                >
-                    RETURN TO START
-                </button>
+                {/* Actions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                    {lobbyRestarted ? (
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => {
+                                clearLobbyRestarted();
+                                navigate('/lobby');
+                            }}
+                        >
+                            RETURN TO LOBBY
+                        </button>
+                    ) : (
+                        <SystemMessage>WAITING FOR HOST TO START NEW GAME...</SystemMessage>
+                    )}
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                            leaveGame();
+                            navigate('/');
+                        }}
+                    >
+                        LEAVE GAME
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -59,11 +59,13 @@ export function PlayingCardComponent({
     card,
     selected = false,
     disabled = false,
+    size = 'md',
     onClick
 }: {
     card: NumberCard;
     selected?: boolean;
     disabled?: boolean;
+    size?: 'sm' | 'md' | 'lg';
     onClick?: () => void;
 }) {
     const suitSymbol = {
@@ -83,7 +85,8 @@ export function PlayingCardComponent({
 
     return (
         <div
-            className={`playing-card ${suitClass} ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+            className={`playing-card ${suitClass} ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''} size-${size}`}
+            style={size === 'sm' ? { width: '40px', height: '60px', fontSize: '0.8rem' } : undefined}
             onClick={disabled ? undefined : onClick}
         >
             <span className="playing-card-value">{valueDisplay}</span>
@@ -112,13 +115,44 @@ export function SpecialCardComponent({
         shotgun: { icon: '×', label: 'KILL' }
     }[type];
 
+    // Distinct colors: Yellow for Vaccine, Green for Infect, Red for Kill
+    const colorStyles = {
+        zombie: {
+            background: 'linear-gradient(135deg, #1a3a1a 0%, #0a2a0a 100%)',
+            borderColor: '#00ff44',
+            color: '#00ff44',
+            boxShadow: '0 0 15px rgba(0, 255, 68, 0.3)'
+        },
+        vaccine: {
+            background: 'linear-gradient(135deg, #3a3a0a 0%, #2a2a0a 100%)',
+            borderColor: '#ffdd00',
+            color: '#ffdd00',
+            boxShadow: '0 0 15px rgba(255, 221, 0, 0.3)'
+        },
+        shotgun: {
+            background: 'linear-gradient(135deg, #3a1a1a 0%, #2a0a0a 100%)',
+            borderColor: '#ff4444',
+            color: '#ff4444',
+            boxShadow: '0 0 15px rgba(255, 68, 68, 0.3)'
+        }
+    }[type];
+
     return (
         <div
             className={`special-card ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
             onClick={disabled ? undefined : onClick}
+            style={{
+                background: colorStyles.background,
+                borderColor: colorStyles.borderColor,
+                borderWidth: selected ? '4px' : '2px',
+                color: colorStyles.color,
+                boxShadow: selected ? `${colorStyles.boxShadow}, 0 0 25px ${colorStyles.borderColor}` : undefined,
+                transform: selected ? 'scale(1.05)' : 'scale(1)',
+                transition: 'all 0.2s ease',
+            }}
         >
-            <span className="special-card-icon">{config.icon}</span>
-            <span className="special-card-label">{config.label}</span>
+            <span className="special-card-icon" style={{ color: colorStyles.color }}>{config.icon}</span>
+            <span className="special-card-label" style={{ color: colorStyles.color }}>{config.label}</span>
         </div>
     );
 }

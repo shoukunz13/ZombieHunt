@@ -300,11 +300,20 @@ export function LobbyScreen() {
                                 textAlign: 'center',
                                 padding: 'var(--space-xl)'
                             }}>
-                                <SystemMessage>
-                                    {gameState?.phase === 'waiting'
-                                        ? 'AWAITING PARTICIPANTS'
-                                        : 'NO TARGETS AVAILABLE'}
-                                </SystemMessage>
+                                {gameState?.phase === 'waiting' ? (
+                                    <SystemMessage>AWAITING PARTICIPANTS</SystemMessage>
+                                ) : (
+                                    <>
+                                        <p className="heading-display" style={{
+                                            fontSize: 'var(--font-size-xl)',
+                                            color: 'var(--accent-green)',
+                                            marginBottom: 'var(--space-md)'
+                                        }}>
+                                            ✓ SAFE THIS ROUND
+                                        </p>
+                                        <SystemMessage>ALL TARGETS UNAVAILABLE</SystemMessage>
+                                    </>
+                                )}
                             </div>
                         ) : (
                             <div className="player-list">
@@ -316,7 +325,7 @@ export function LobbyScreen() {
                                     >
                                         <span className="player-name">{player.name}</span>
                                         <span className="player-status">
-                                            {player.numberCardCount} CARDS
+                                            STATS HIDDEN
                                         </span>
                                     </div>
                                 ))}
@@ -332,7 +341,7 @@ export function LobbyScreen() {
                         textAlign: 'center'
                     }}>
                         <SystemMessage>
-                            {players.length} PARTICIPANTS CONNECTED
+                            {players.filter(p => p.isAlive).length} PARTICIPANTS CONNECTED
                         </SystemMessage>
                         <button
                             className="btn btn-secondary"

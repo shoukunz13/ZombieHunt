@@ -65,7 +65,9 @@ export interface Player {
 
 // ============ Duel Types ============
 
-export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun';
+export type ActionType = 'number' | 'zombie' | 'vaccine' | 'shotgun' | 'zombie_with_numbers';
+
+export type EventType = 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end' | 'annihilation' | 'betrayal';
 
 export interface DuelAction {
     playerId: string;
@@ -79,10 +81,26 @@ export interface DuelResult {
     winnerId: string | null; // null = draw
     loserId: string | null;
     stolenCardId?: string;
+    lootableCards?: NumberCard[]; // Cards played by loser that winner can pick from
+    cardLost?: Card; // Card lost due to penalty (e.g. zombie attacking zombie)
     infections: string[]; // playerIds who got infected
     cures: string[]; // playerIds who got cured
     shotgunKills: string[]; // playerIds killed by shotgun
     eliminations: string[]; // playerIds eliminated (out of cards or shotgunned)
+    p1PlayedCards?: NumberCard[]; // Cards player1 played (for reveal animation)
+    p2PlayedCards?: NumberCard[]; // Cards player2 played (for reveal animation)
+    zombieCardRevealed?: boolean; // True if zombie won and revealed their card to infect
+    p1PlayedZombie?: boolean; // True if player1 played a zombie card
+    p2PlayedZombie?: boolean; // True if player2 played a zombie card
+    p1PlayedVaccine?: boolean; // True if player1 played a vaccine card
+    p2PlayedVaccine?: boolean; // True if player2 played a vaccine card
+    p1CuredOpponent?: boolean; // True if player1's vaccine cured player2
+    p2CuredOpponent?: boolean; // True if player2's vaccine cured player1
+    p1VaccineWasted?: boolean; // True if player1's vaccine was wasted (on human)
+    p2VaccineWasted?: boolean; // True if player2's vaccine was wasted (on human)
+    zombieVsZombie?: boolean; // True if zombie attacked another zombie
+    p1PlayedShotgun?: boolean; // True if player1 played a shotgun
+    p2PlayedShotgun?: boolean; // True if player2 played a shotgun
 }
 
 export type DuelStatus = 'pending' | 'in_progress' | 'resolved';
@@ -106,7 +124,7 @@ export type GamePhase = 'waiting' | 'intro' | 'lobby' | 'duel' | 'meeting' | 'en
 export interface PublicEvent {
     id: string;
     round: number;
-    type: 'infection' | 'cure' | 'shotgun_fired' | 'elimination' | 'round_start' | 'round_end';
+    type: EventType;
     message: string; // Anonymized message
 }
 
@@ -120,6 +138,7 @@ export interface GameSettings {
     shotgunRatio: number;        // 0-100, % of players with shotguns
     maxInfections: number;       // 0-20, max infections per zombie (0 = unlimited)
     annihilationRule: boolean;   // If all become zombies, everyone dies
+    requireZombieWin: boolean;   // Zombie must win card battle to infect
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -130,6 +149,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
     shotgunRatio: 50,
     maxInfections: 0,
     annihilationRule: true,
+    requireZombieWin: false,
 };
 
 /**
@@ -177,7 +197,6 @@ export interface PlayerPublic {
     isAlive: boolean;
     isPaired: boolean;
     isConnected: boolean;
-    numberCardCount: number;
     // Invite state for new flow
     hasOutgoingInvite: boolean;          // Has sent invite, waiting for response
     incomingInviteFromId: string | null; // ID of player who invited you
@@ -215,6 +234,19 @@ export interface DuelResultPrivate {
     shotgunResult?: 'killed_zombie' | 'wasted_on_human';
     opponentEliminated: boolean;
     youEliminated: boolean;
+    lootableCards?: NumberCard[]; // If you won, these are cards you can pick from
+    yourCards?: NumberCard[]; // Cards you played (for reveal animation)
+    opponentCards?: NumberCard[]; // Cards opponent played (for reveal animation)
+    zombieCardRevealed?: boolean; // If true, show zombie card reveal animation (opponent infected you)
+    yourPlayedZombie?: boolean; // True if you played a zombie card
+    opponentPlayedZombie?: boolean; // True if opponent played a zombie card
+    yourPlayedVaccine?: boolean; // True if you played a vaccine card
+    opponentPlayedVaccine?: boolean; // True if opponent played a vaccine card
+    opponentCured?: boolean; // True if your vaccine cured the opponent
+    vaccineWasted?: boolean; // True if vaccine was used on a human (wasted)
+    zombieVsZombie?: boolean; // True if zombie attacked another zombie
+    yourPlayedShotgun?: boolean; // True if you played a shotgun card
+    opponentPlayedShotgun?: boolean; // True if opponent played a shotgun card
 }
 
 export interface GameStatePublic {
@@ -225,6 +257,7 @@ export interface GameStatePublic {
     phaseEndsAt?: number;
     playerCount: number;
     alivePlayerCount: number;
+    requireZombieWin?: boolean; // Whether zombie must win card battle to infect
 }
 
 // ============ Host-Only State ============

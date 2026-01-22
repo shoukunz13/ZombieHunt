@@ -56,6 +56,41 @@ export function clearGame(): void {
 }
 
 /**
+ * Restart game to waiting phase (for Play Again, keeps players and settings)
+ */
+export function restartGameToWaiting(game: GameState): boolean {
+    if (!game) return false;
+
+    // Reset game state but keep players and settings
+    game.phase = 'waiting';
+    game.round = 0;
+    game.duels = new Map();
+    game.currentRoundDuels = [];
+    game.events = [];
+
+    // Reset all players to waiting state (clear roles, cards, statuses)
+    for (const player of game.players.values()) {
+        // Note: role will be reassigned when game starts, using 'human' as default
+        (player as any).role = 'human'; // Will be reassigned on game start
+        player.numberCards = [];
+        player.zombieCard = null;
+        player.vaccineCard = null;
+        player.hasShotgun = false;
+        player.status = 'alive';
+        player.selectedOpponentId = null;
+        player.currentDuelId = null;
+        player.isPaired = false;
+        player.sittingOutRound = undefined;
+        player.infectionCount = 0;
+        player.eliminationReason = undefined;
+    }
+
+    saveGame(game);
+    console.log(`[RESTART] Game ${game.gameCode} restarted to waiting phase with ${game.players.size} players`);
+    return true;
+}
+
+/**
  * Update game settings (host only, during waiting phase)
  */
 export function updateSettings(game: GameState, settings: Partial<GameSettings>): boolean {
@@ -81,6 +116,9 @@ export function updateSettings(game: GameState, settings: Partial<GameSettings>)
     }
     if (settings.annihilationRule !== undefined) {
         game.settings.annihilationRule = settings.annihilationRule;
+    }
+    if (settings.requireZombieWin !== undefined) {
+        game.settings.requireZombieWin = settings.requireZombieWin;
     }
 
     saveGame(game);
@@ -327,11 +365,6 @@ export function selectOpponent(game: GameState, playerId: string, opponentId: st
     if (player.currentDuelId || opponent.currentDuelId) return { success: false }; // Already in duel
     if (playerId === opponentId) return { success: false };
 
-    // Check if either player is sitting out this round
-    if (player.sittingOutRound === game.round || opponent.sittingOutRound === game.round) {
-        return { success: false };
-    }
-
     // Check if opponent has already selected this player (mutual selection)
     if (opponent.selectedOpponentId === playerId) {
         // Mutual selection! Create duel immediately
@@ -514,6 +547,9 @@ export function startNextRound(game: GameState): void {
     game.phase = 'lobby';
     game.phaseEndsAt = undefined;
 
+    // Clear duels from previous round so they don't affect phase transition checks
+    game.currentRoundDuels = [];
+
     addEvent(game, 'round_start', `Round ${game.round} begins`);
     saveGame(game);
 }
@@ -601,7 +637,6 @@ export function getPlayerPublic(player: Player, game?: GameState): PlayerPublic 
         isAlive: player.status === 'alive',
         isPaired: player.isPaired,
         isConnected: player.socketId !== null,
-        numberCardCount: player.numberCards.length,
         hasOutgoingInvite: player.selectedOpponentId !== null && !player.isPaired,
         incomingInviteFromId,
         isInDuel: player.currentDuelId !== null,
@@ -641,6 +676,7 @@ export function getGameStatePublic(game: GameState): GameStatePublic {
         phaseEndsAt: game.phaseEndsAt,
         playerCount: game.players.size,
         alivePlayerCount: alivePlayers.length,
+        requireZombieWin: game.settings.requireZombieWin,
     };
 }
 

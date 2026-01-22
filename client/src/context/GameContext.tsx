@@ -96,6 +96,11 @@ interface GameContextType {
     clearDuel: () => void;
     leaveGame: () => void;
     hasSession: boolean;
+    lobbyDestroyed: boolean;
+    clearLobbyDestroyed: () => void;
+    lobbyRestarted: boolean;
+    clearLobbyRestarted: () => void;
+    claimLoot: (duelId: string, cardId: string) => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -135,7 +140,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
     // Session state  
     const [hasSession, setHasSession] = useState<boolean>(() => loadSession() !== null);
-    const [gameCode, setGameCode] = useState<string | null>(null);
+    const [lobbyDestroyed, setLobbyDestroyed] = useState(false);
+    const [lobbyRestarted, setLobbyRestarted] = useState(false);
 
     // Initialize socket connection
     useEffect(() => {
@@ -183,7 +189,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
                     gameCode: data.gameStatePublic.gameCode,
                 };
                 saveSession(session);
-                setGameCode(data.gameStatePublic.gameCode);
                 setHasSession(true);
             }
         });
@@ -204,6 +209,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
                 phase: data.phase,
                 round: data.round,
                 phaseEndsAt: data.endsAt,
+                requireZombieWin: data.requireZombieWin ?? prev.requireZombieWin, // Update competitive setting from server
             } : null);
 
             // Reset duel state on phase change
@@ -229,8 +235,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         });
 
         newSocket.on('duel_resolution', (data: DuelResolutionPayload) => {
+            console.log('[duel_resolution] Received:', data);
             setDuelResult(data.resultPrivate);
             setPrivateState(data.updatedPrivateState);
+
+            if (data.resultPrivate.lootableCards) {
+                console.log('[duel_resolution] Lootable cards:', data.resultPrivate.lootableCards);
+            }
         });
 
         newSocket.on('meeting_summary', (data: MeetingSummaryPayload) => {
@@ -263,6 +274,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setIsEliminated(false);
             setEliminationReason(null);
             setError('Game has been terminated by host');
+
+            // Clear session storage and set redirect flag
+            clearSession();
+            setHasSession(false);
+            setLobbyDestroyed(true);
+        });
+
+        newSocket.on('lobby_restarted', () => {
+            // Host has started a new game - players can now return to lobby
+            console.log('Lobby restarted by host - can return to lobby');
+            setLobbyRestarted(true);
+            // Clear end game state so player can rejoin
+            setFinalReveal(null);
+            setYourOutcome(null);
+            // Clear elimination state so killed players can rejoin
+            setIsEliminated(false);
+            setEliminationReason(null);
+            // Clear duel state so card flip screen doesn't appear
+            setCurrentDuel(null);
+            setDuelResult(null);
         });
 
         setSocket(newSocket);
@@ -354,7 +385,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setYourOutcome(null);
         setIsEliminated(false);
         setEliminationReason(null);
-        setGameCode(null);
+    }, [socket]);
+
+    const clearLobbyDestroyed = useCallback(() => {
+        setLobbyDestroyed(false);
+    }, []);
+
+    const clearLobbyRestarted = useCallback(() => {
+        setLobbyRestarted(false);
+    }, []);
+
+    const claimLoot = useCallback((duelId: string, cardId: string) => {
+        if (socket) {
+            socket.emit('claim_loot', { duelId, cardId });
+        }
     }, [socket]);
 
     const value: GameContextType = {
@@ -385,6 +429,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         clearDuel,
         leaveGame,
         hasSession,
+        lobbyDestroyed,
+        clearLobbyDestroyed,
+        lobbyRestarted,
+        clearLobbyRestarted,
+        claimLoot,
     };
 
     return (
