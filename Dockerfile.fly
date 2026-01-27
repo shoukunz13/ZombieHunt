@@ -1,0 +1,66 @@
+# Zombie Hunt - Fly.io Combined Dockerfile
+# Multi-stage build: Client + Server + Nginx + Supervisor
+
+# =============================================================================
+# Stage 1: Build the React client
+# =============================================================================
+FROM node:20-alpine AS client-builder
+
+WORKDIR /build/client
+
+# Copy package files and install dependencies
+COPY client/package*.json ./
+RUN npm ci
+
+# Copy source and build
+COPY client/ ./
+RUN npm run build
+
+# =============================================================================
+# Stage 2: Build the Node.js server
+# =============================================================================
+FROM node:20-alpine AS server-builder
+
+WORKDIR /build/server
+
+# Copy package files and install dependencies
+COPY server/package*.json ./
+RUN npm ci
+
+# Copy source and build TypeScript
+COPY server/ ./
+RUN npm run build
+
+# =============================================================================
+# Stage 3: Production image with nginx + Node.js + Supervisor
+# =============================================================================
+FROM node:20-alpine AS production
+
+# Install nginx and supervisor
+RUN apk add --no-cache nginx supervisor
+
+# Create app directory structure
+RUN mkdir -p /app/client/dist /app/server/dist /var/log/supervisor /run/nginx
+
+WORKDIR /app
+
+# Copy built client files
+COPY --from=client-builder /build/client/dist /app/client/dist
+
+# Copy server production dependencies and built files
+COPY --from=server-builder /build/server/package*.json /app/server/
+COPY --from=server-builder /build/server/dist /app/server/dist
+COPY --from=server-builder /build/server/node_modules /app/server/node_modules
+
+# Copy nginx and supervisor configuration
+COPY deploy/nginx-fly.conf /etc/nginx/http.d/default.conf
+COPY deploy/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Remove default nginx config that listens on port 80
+RUN rm -f /etc/nginx/http.d/default.conf.bak 2>/dev/null || true
+
+# Expose port 8080 (Fly.io preferred)
+EXPOSE 8080
+
+# Start supervisor (manages nginx + node)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

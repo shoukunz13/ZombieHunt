@@ -151,9 +151,7 @@ export function createParticleEmitter(
             maxSpeed,
             minLife,
             maxLife,
-            gravity = 0,
             spread = Math.PI * 2,
-            fadeOut = true
         } = config;
 
         const angle = (Math.random() - 0.5) * spread - Math.PI / 2;

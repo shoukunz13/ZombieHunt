@@ -44,7 +44,7 @@ export function CardRevealAnimation({
 }: CardRevealAnimationProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
-    const [phase, setPhase] = useState<'flipping' | 'result' | 'done'>('flipping');
+    const [, setPhase] = useState<'flipping' | 'result' | 'done'>('flipping');
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -159,7 +159,6 @@ export function CardRevealAnimation({
             const createCardFace = (numberCard: NumberCard) => {
                 const card = new Container();
                 const isRed = numberCard.suit === 'hearts' || numberCard.suit === 'diamonds';
-                const color = isRed ? 0xff4444 : 0xffffff;
 
                 const bg = new Graphics();
                 bg.roundRect(-CARD_WIDTH / 2, -CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 8);
