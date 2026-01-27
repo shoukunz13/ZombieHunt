@@ -41,24 +41,26 @@ export function LobbyScreen() {
             return;
         }
 
+        const lobbyCode = gameState.gameCode;
+
         // Navigate to duel when assigned
         if (currentDuel) {
-            console.log('[LobbyScreen] Navigating to /duel');
-            navigate('/duel');
+            console.log('[LobbyScreen] Navigating to duel');
+            navigate(`/game/${lobbyCode}/duel`);
         } else if (gameState.phase === 'meeting') {
-            console.log('[LobbyScreen] Navigating to /meeting');
-            navigate('/meeting');
+            console.log('[LobbyScreen] Navigating to meeting');
+            navigate(`/game/${lobbyCode}/meeting`);
         } else if (gameState.phase === 'ended') {
-            console.log('[LobbyScreen] Navigating to /end');
-            navigate('/end');
+            console.log('[LobbyScreen] Navigating to end');
+            navigate(`/game/${lobbyCode}/end`);
         }
     }, [gameState, currentDuel, navigate]);
 
     useEffect(() => {
-        if (isEliminated) {
-            navigate('/eliminated');
+        if (isEliminated && gameState) {
+            navigate(`/game/${gameState.gameCode}/eliminated`);
         }
-    }, [isEliminated, navigate]);
+    }, [isEliminated, gameState, navigate]);
 
     // Detect game start (transition from 'intro' to 'lobby', after host video completes)
     useEffect(() => {

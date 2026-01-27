@@ -1,0 +1,43 @@
+# Zombie Hunt - Docker Compose Configuration
+# Multi-tenant game server with nginx reverse proxy
+
+version: '3.8'
+
+services:
+  # Node.js API server with Socket.io
+  api:
+    build: ./server
+    environment:
+      - NODE_ENV=production
+      - HOST_PIN=${HOST_PIN:?HOST_PIN is required for admin dashboard}
+      - PORT=3001
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - METRICS_KEY=${METRICS_KEY:-}
+    restart: unless-stopped
+    networks:
+      - zombiehunt
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Uncomment to expose API directly (for debugging)
+    # ports:
+    #   - "3001:3001"
+
+  # Nginx serving static files + WebSocket proxy
+  web:
+    build: ./client
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - zombiehunt
+
+networks:
+  zombiehunt:
+    driver: bridge

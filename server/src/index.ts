@@ -1,6 +1,8 @@
 /**
  * Zombie Hunt - Server Entry Point
  * Express + Socket.io server for the game.
+ * 
+ * Multi-tenant architecture: Supports multiple concurrent lobbies.
  */
 
 import express from 'express';
@@ -10,6 +12,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { CONFIG } from './config';
 import { initializeSocketHandlers } from './socketHandlers';
+import * as lobbyManager from './lobbyManager';
 
 const app = express();
 const httpServer = createServer(app);
@@ -131,7 +134,11 @@ app.use(express.json({ limit: '10kb' }));
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: Date.now() });
+    res.json({ 
+        status: 'ok', 
+        timestamp: Date.now(),
+        lobbies: lobbyManager.getLobbyCount(),
+    });
 });
 
 // API endpoint to get server info
@@ -143,6 +150,8 @@ app.get('/api/info', (_req, res) => {
             rounds: CONFIG.ROUNDS,
             duelDuration: CONFIG.DUEL_DURATION_SEC,
             meetingDuration: CONFIG.MEETING_DURATION_SEC,
+            maxLobbies: lobbyManager.MAX_LOBBIES,
+            maxPlayersPerLobby: lobbyManager.MAX_PLAYERS_PER_LOBBY,
         },
     });
 });
@@ -155,6 +164,7 @@ app.get('/api/metrics', (req, res) => {
     }
     res.json({
         ...metrics,
+        lobbyCount: lobbyManager.getLobbyCount(),
         connectionsPerIPCount: connectionsPerIP.size,
         memoryUsage: process.memoryUsage(),
         uptime: process.uptime(),
@@ -164,6 +174,9 @@ app.get('/api/metrics', (req, res) => {
 // Initialize Socket.io handlers with metrics reference
 initializeSocketHandlers(io, metrics);
 
+// Start lobby cleanup interval
+lobbyManager.startCleanupInterval();
+
 // Start server
 httpServer.listen(CONFIG.PORT, '0.0.0.0', () => {
     const pinDisplay = isDevelopment ? CONFIG.HOST_PIN : '[SET VIA HOST_PIN ENV]';
@@ -172,14 +185,25 @@ httpServer.listen(CONFIG.PORT, '0.0.0.0', () => {
 ║              🧟 ZOMBIE HUNT SERVER 🧟                     ║
 ╠══════════════════════════════════════════════════════════╣
 ║  Server running on port ${CONFIG.PORT}                          ║
-║  Host PIN: ${pinDisplay}                                    ║
+║  Admin PIN: ${pinDisplay}                                   ║
 ║  Mode: ${isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'}                              ║
 ║  Max connections/IP: ${MAX_CONNECTIONS_PER_IP}                              ║
+║  Max lobbies: ${lobbyManager.MAX_LOBBIES}                                     ║
 ║                                                          ║
-║  For LAN play, connect to:                               ║
-║  http://<your-local-ip>:${CONFIG.PORT}                          ║
+║  Multi-tenant: Anyone can create lobbies                 ║
+║  Admin dashboard: /host (requires PIN)                   ║
 ╚══════════════════════════════════════════════════════════╝
   `);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    lobbyManager.stopCleanupInterval();
+    httpServer.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
 });
 
 // Export metrics for other modules

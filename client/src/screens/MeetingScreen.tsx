@@ -37,20 +37,22 @@ export function MeetingScreen() {
             return;
         }
 
+        const lobbyCode = gameState.gameCode;
+
         if (gameState.phase === 'lobby') {
-            navigate('/lobby');
+            navigate(`/game/${lobbyCode}/lobby`);
         } else if (gameState.phase === 'duel') {
-            navigate('/duel');
+            navigate(`/game/${lobbyCode}/duel`);
         } else if (gameState.phase === 'ended') {
-            navigate('/end');
+            navigate(`/game/${lobbyCode}/end`);
         }
     }, [gameState, navigate]);
 
     useEffect(() => {
-        if (isEliminated) {
-            navigate('/eliminated');
+        if (isEliminated && gameState) {
+            navigate(`/game/${gameState.gameCode}/eliminated`);
         }
-    }, [isEliminated, navigate]);
+    }, [isEliminated, gameState, navigate]);
 
     if (!privateState || !gameState) {
         return (

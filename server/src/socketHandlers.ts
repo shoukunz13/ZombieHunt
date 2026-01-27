@@ -1,17 +1,19 @@
 /**
  * Zombie Hunt - Socket.io Event Handlers
  * All real-time communication between clients, host, and server.
+ * 
+ * Multi-tenant architecture: Each socket is associated with a lobby via socket.data
  */
 
 import { Server, Socket } from 'socket.io';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 import {
-    getOrCreateGame, getGame, addPlayer, findPlayerBySocketId,
-    handleDisconnect, handleReconnect, selectOpponent, cancelSelection,
+    addPlayer, findPlayerBySocketId, removePlayer,
+    handleDisconnect, handleReconnect, handleReconnectById, selectOpponent, cancelSelection,
     declineInvite, allPlayersPaired, startGame, startDuelPhase, startMeetingPhase,
     startNextRound, getPlayer, getPlayerPublic, getPlayerPrivate,
     getGameStatePublic, getHostState, getFinalReveal, getAlivePlayers,
-    getCurrentRoundEvents, resetGame, clearGame, completeIntro, updateSettings, endGame,
+    getCurrentRoundEvents, completeIntro, updateSettings, endGame,
     restartGameToWaiting
 } from './gameState';
 import {
@@ -20,8 +22,21 @@ import {
 } from './duelResolver';
 import { CONFIG } from './config';
 import { GameState, Player, Duel, PlayerPublic } from './types';
+import * as lobbyManager from './lobbyManager';
 
-// Rate limiters
+// ============ Socket Data Interface ============
+
+interface SocketData {
+    lobbyCode: string | null;
+    playerId: string | null;
+    isHost: boolean;
+}
+
+// NOTE: Socket.data is already typed via Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, SocketData>
+// No need to extend the module as the data property is built-in
+
+// ============ Rate Limiters ============
+
 const eventRateLimiter = new RateLimiterMemory({
     points: 20,      // 20 events
     duration: 1,     // per 1 second
@@ -38,6 +53,14 @@ const joinRateLimiter = new RateLimiterMemory({
     duration: 60,    // per minute
 });
 
+const createLobbyRateLimiter = new RateLimiterMemory({
+    points: 3,       // 3 lobbies
+    duration: 60,    // per minute
+    blockDuration: 300, // 5 min block if exceeded
+});
+
+// ============ Helpers ============
+
 // Normalize IP addresses for consistent rate limiting
 function normalizeIP(ip: string): string {
     if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip === '127.0.0.1') {
@@ -49,9 +72,16 @@ function normalizeIP(ip: string): string {
     return ip;
 }
 
-// Store phase timers
-let phaseTimer: NodeJS.Timeout | null = null;
-let hostSocketId: string | null = null;
+// Get lobby room name
+function getLobbyRoom(code: string): string {
+    return `lobby:${code}`;
+}
+
+// Store phase timers per lobby
+const phaseTimers = new Map<string, NodeJS.Timeout>();
+
+// Global host socket tracking (for admin dashboard)
+let adminHostSocketId: string | null = null;
 
 // Metrics type for observability
 interface Metrics {
@@ -64,6 +94,8 @@ interface Metrics {
 // Module-level metrics reference
 let serverMetrics: Metrics | null = null;
 
+// ============ Initialize Handlers ============
+
 /**
  * Initialize Socket.io handlers
  */
@@ -73,11 +105,62 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
     io.on('connection', (socket: Socket) => {
         console.log(`[CONN] ${socket.id} connected`);
 
+        // Initialize socket data
+        socket.data = {
+            lobbyCode: null,
+            playerId: null,
+            isHost: false,
+        };
 
-        // ============ Client Events ============
+        // ============ Lobby Management Events ============
+
+        socket.on('create_lobby', async () => {
+            await handleCreateLobby(io, socket);
+        });
+
+        socket.on('join_lobby', async (data: unknown) => {
+            if (!data || typeof data !== 'object') {
+                socket.emit('error', { message: 'Invalid request' });
+                return;
+            }
+            const { lobbyCode, playerName } = data as { lobbyCode: string; playerName: string };
+            if (typeof lobbyCode !== 'string' || typeof playerName !== 'string') {
+                socket.emit('error', { message: 'Invalid request format' });
+                return;
+            }
+            await handleJoinLobby(io, socket, lobbyCode, playerName);
+        });
+
+        socket.on('reconnect_lobby', async (data: unknown) => {
+            if (!data || typeof data !== 'object') {
+                socket.emit('error', { message: 'Invalid request' });
+                return;
+            }
+            const { lobbyCode, playerToken } = data as { lobbyCode: string; playerToken: string };
+            if (typeof lobbyCode !== 'string' || typeof playerToken !== 'string') {
+                socket.emit('error', { message: 'Invalid request format' });
+                return;
+            }
+            handleReconnectLobby(io, socket, lobbyCode, playerToken);
+        });
+
+        socket.on('host_join_lobby', (data: unknown) => {
+            if (!data || typeof data !== 'object') {
+                socket.emit('error', { message: 'Invalid request' });
+                return;
+            }
+            const { lobbyCode, hostToken } = data as { lobbyCode: string; hostToken: string };
+            if (typeof lobbyCode !== 'string' || typeof hostToken !== 'string') {
+                socket.emit('error', { message: 'Invalid request format' });
+                return;
+            }
+            handleHostJoinLobby(io, socket, lobbyCode, hostToken);
+        });
+
+        // ============ Legacy Join Event (for backwards compatibility during transition) ============
 
         socket.on('join_game', (data: unknown) => {
-            // Input validation - guard against null/malformed data
+            // Redirect to join_lobby
             if (!data || typeof data !== 'object') {
                 socket.emit('error', { message: 'Invalid request' });
                 return;
@@ -87,8 +170,10 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
                 socket.emit('error', { message: 'Invalid request format' });
                 return;
             }
-            handleJoinGame(io, socket, gameCode, name);
+            handleJoinLobby(io, socket, gameCode, name);
         });
+
+        // ============ Player Events ============
 
         socket.on('lobby_select_opponent', ({ opponentId }: { opponentId: string }) => {
             handleSelectOpponent(io, socket, opponentId);
@@ -123,18 +208,47 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
             socket.emit('pong', { timestamp: Date.now() });
         });
 
-        socket.on('rejoin_game', ({ playerId, gameCode, name }: { playerId: string; gameCode: string; name: string }) => {
-            handleRejoinGame(io, socket, playerId, gameCode, name);
-        });
-
         socket.on('leave_game', () => {
             handleLeaveGame(io, socket);
         });
 
-        // ============ Host Events ============
+        // ============ Host Events (Per-Lobby) ============
+
+        socket.on('host_start_game', (data?: { hostToken?: string }) => {
+            handleHostStartGame(io, socket, data?.hostToken);
+        });
+
+        socket.on('host_force_phase', (data: { phase: string; hostToken?: string }) => {
+            handleHostForcePhase(io, socket, data.phase, data.hostToken);
+        });
+
+        socket.on('host_kick_player', (data: { playerId: string; hostToken?: string }) => {
+            handleHostKickPlayer(io, socket, data.playerId, data.hostToken);
+        });
+
+        socket.on('host_end_game', (data?: { hostToken?: string }) => {
+            handleHostEndGame(io, socket, data?.hostToken);
+        });
+
+        socket.on('host_intro_complete', (data?: { hostToken?: string }) => {
+            handleHostIntroComplete(io, socket, data?.hostToken);
+        });
+
+        socket.on('host_update_settings', (data: { settings: Partial<import('./types').GameSettings>; hostToken?: string }) => {
+            handleHostUpdateSettings(io, socket, data.settings, data.hostToken);
+        });
+
+        socket.on('host_reveal_complete', (data?: { hostToken?: string }) => {
+            handleHostRevealComplete(io, socket, data?.hostToken);
+        });
+
+        socket.on('host_restart_game', (data?: { hostToken?: string }) => {
+            handleHostRestartGame(io, socket, data?.hostToken);
+        });
+
+        // ============ Admin Dashboard Events (Global - requires HOST_PIN) ============
 
         socket.on('host_auth', (data: unknown) => {
-            // Input validation
             if (!data || typeof data !== 'object') {
                 socket.emit('host_auth_failed', { message: 'Invalid request' });
                 return;
@@ -144,43 +258,11 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
                 socket.emit('host_auth_failed', { message: 'Invalid request format' });
                 return;
             }
-            handleHostAuth(io, socket, pin);
+            handleAdminAuth(io, socket, pin);
         });
 
-        socket.on('host_start_game', () => {
-            handleHostStartGame(io, socket);
-        });
-
-        socket.on('host_force_phase', ({ phase }: { phase: string }) => {
-            handleHostForcePhase(io, socket, phase);
-        });
-
-        socket.on('host_kick_player', ({ playerId }: { playerId: string }) => {
-            handleHostKickPlayer(io, socket, playerId);
-        });
-
-        socket.on('host_create_game', ({ gameCode }: { gameCode: string }) => {
-            handleHostCreateGame(io, socket, gameCode);
-        });
-
-        socket.on('host_end_game', () => {
-            handleHostEndGame(io, socket);
-        });
-
-        socket.on('host_intro_complete', () => {
-            handleHostIntroComplete(io, socket);
-        });
-
-        socket.on('host_update_settings', (settings: Partial<import('./types').GameSettings>) => {
-            handleHostUpdateSettings(io, socket, settings);
-        });
-
-        socket.on('host_reveal_complete', () => {
-            handleHostRevealComplete(io, socket);
-        });
-
-        socket.on('host_restart_game', () => {
-            handleHostRestartGame(io, socket);
+        socket.on('admin_get_lobbies', () => {
+            handleAdminGetLobbies(io, socket);
         });
 
         // ============ Disconnect ============
@@ -191,48 +273,102 @@ export function initializeSocketHandlers(io: Server, metrics?: Metrics): void {
     });
 }
 
-// ============ Handler Implementations ============
+// ============ Lobby Management Handlers ============
 
-async function handleJoinGame(io: Server, socket: Socket, gameCode: string, name: string): Promise<void> {
+async function handleCreateLobby(io: Server, socket: Socket): Promise<void> {
+    const clientIP = normalizeIP(socket.handshake.address);
+
+    // Rate limit lobby creation
+    try {
+        await createLobbyRateLimiter.consume(clientIP);
+    } catch {
+        console.log(`[RATE-LIMIT] create_lobby blocked for IP ${clientIP}`);
+        if (serverMetrics) serverMetrics.rateLimitBlocks++;
+        socket.emit('error', { message: 'Too many lobby creations. Please wait.' });
+        return;
+    }
+
+    const result = lobbyManager.createLobby();
+    if (!result.success) {
+        socket.emit('too_many_lobbies', {});
+        return;
+    }
+
+    // Mark this socket as the host
+    socket.data.lobbyCode = result.lobbyCode;
+    socket.data.isHost = true;
+
+    // Join the lobby room
+    socket.join(getLobbyRoom(result.lobbyCode));
+
+    console.log(`[LOBBY] Socket ${socket.id} created lobby ${result.lobbyCode}`);
+
+    socket.emit('lobby_created', {
+        lobbyCode: result.lobbyCode,
+        hostToken: result.hostToken,
+    });
+}
+
+async function handleJoinLobby(io: Server, socket: Socket, lobbyCode: string, playerName: string): Promise<void> {
     const clientIP = normalizeIP(socket.handshake.address);
 
     // Rate limit join attempts
     try {
         await joinRateLimiter.consume(clientIP);
     } catch {
-        console.log(`[RATE-LIMIT] join_game blocked for IP ${clientIP}`);
+        console.log(`[RATE-LIMIT] join_lobby blocked for IP ${clientIP}`);
         if (serverMetrics) serverMetrics.rateLimitBlocks++;
         socket.emit('error', { message: 'Too many join attempts. Please wait.' });
         return;
     }
 
-    // Sanitize player name (prevent XSS, limit length)
-    const sanitizedName = name.trim().replace(/[<>"'&]/g, '').substring(0, 16);
+    // Sanitize player name
+    const sanitizedName = playerName.trim().replace(/[<>"'&]/g, '').substring(0, 16);
     if (!sanitizedName || sanitizedName.length < 1) {
         socket.emit('error', { message: 'Invalid name' });
         return;
     }
 
-    const game = getGame();
-
-    // Check if game exists and matches the code
-    if (!game || game.gameCode !== gameCode) {
-        socket.emit('error', { message: 'Game not found. Ask the host to create a game first.' });
+    // Get lobby
+    const lobby = lobbyManager.getLobby(lobbyCode);
+    if (!lobby) {
+        socket.emit('lobby_not_found', { code: lobbyCode });
         return;
     }
 
-    // Try reconnection first
+    // Check if lobby is full
+    if (lobby.state.players.size >= lobby.config.maxPlayers) {
+        socket.emit('lobby_full', { code: lobbyCode });
+        return;
+    }
+
+    const game = lobby.state;
+
+    // Try reconnection first if game started
     if (game.phase !== 'waiting') {
         const player = handleReconnect(game, sanitizedName, socket.id);
         if (player) {
-            socket.join(gameCode);
+            // Generate or get existing player token
+            let playerToken: string;
+            const existingToken = lobby.playerTokens.get(player.id);
+            if (existingToken) {
+                playerToken = existingToken;
+            } else {
+                playerToken = lobbyManager.registerPlayerToken(lobbyCode, player.id);
+            }
+
+            socket.data.lobbyCode = lobbyCode;
+            socket.data.playerId = player.id;
+            socket.join(getLobbyRoom(lobbyCode));
+
             socket.emit('joined', {
                 playerId: player.id,
+                playerToken,
                 gameStatePublic: getGameStatePublic(game),
                 yourPrivateState: getPlayerPrivate(player),
             });
-            broadcastLobbyUpdate(io, game);
-            broadcastHostUpdate(io, game);
+            broadcastLobbyUpdate(io, lobby);
+            broadcastHostUpdate(io, lobby);
             return;
         } else {
             socket.emit('error', { message: 'Game already started, cannot join' });
@@ -241,105 +377,155 @@ async function handleJoinGame(io: Server, socket: Socket, gameCode: string, name
     }
 
     // New player joining
-    const player = addPlayer(game, name, socket.id);
+    const player = addPlayer(game, sanitizedName, socket.id);
     if (!player) {
         socket.emit('error', { message: 'Name already taken or invalid' });
         return;
     }
 
-    socket.join(gameCode);
+    // Generate player token
+    const playerToken = lobbyManager.registerPlayerToken(lobbyCode, player.id);
+
+    socket.data.lobbyCode = lobbyCode;
+    socket.data.playerId = player.id;
+    socket.join(getLobbyRoom(lobbyCode));
+
+    lobbyManager.updateActivity(lobbyCode);
+
     socket.emit('joined', {
         playerId: player.id,
+        playerToken,
         gameStatePublic: getGameStatePublic(game),
         yourPrivateState: getPlayerPrivate(player),
     });
 
-    broadcastLobbyUpdate(io, game);
-    broadcastHostUpdate(io, game);
+    broadcastLobbyUpdate(io, lobby);
+    broadcastHostUpdate(io, lobby);
 }
 
-/**
- * Handle player rejoin from saved session
- */
-function handleRejoinGame(io: Server, socket: Socket, playerId: string, gameCode: string, name: string): void {
-    const game = getGame();
-
-    // Check if game exists and matches the code
-    if (!game || game.gameCode !== gameCode) {
-        socket.emit('error', { message: 'Game not found' });
+function handleReconnectLobby(io: Server, socket: Socket, lobbyCode: string, playerToken: string): void {
+    const lobby = lobbyManager.getLobby(lobbyCode);
+    if (!lobby) {
+        socket.emit('lobby_not_found', { code: lobbyCode });
         return;
     }
 
-    // Find existing player by ID
-    const player = getPlayer(game, playerId);
-    if (player) {
-        // Update socket ID for reconnection
-        player.socketId = socket.id;
-        player.disconnectedAt = undefined;
+    // Validate token and get player ID
+    const playerId = lobbyManager.getPlayerIdFromToken(lobbyCode, playerToken);
+    if (!playerId) {
+        socket.emit('error', { message: 'Invalid or expired session' });
+        return;
+    }
 
-        socket.join(gameCode);
+    const game = lobby.state;
+    const player = handleReconnectById(game, playerId, socket.id);
+    if (!player) {
+        socket.emit('error', { message: 'Player not found' });
+        return;
+    }
+
+    socket.data.lobbyCode = lobbyCode;
+    socket.data.playerId = playerId;
+    socket.join(getLobbyRoom(lobbyCode));
+
+    lobbyManager.updateActivity(lobbyCode);
+
         socket.emit('joined', {
             playerId: player.id,
+        playerToken, // Return the same token
             gameStatePublic: getGameStatePublic(game),
             yourPrivateState: getPlayerPrivate(player),
         });
 
-        console.log(`Player ${player.name} rejoined from session`);
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
-        return;
-    }
-
-    // If player not found by ID, try to rejoin by name (fallback)
-    const playerByName = handleReconnect(game, name, socket.id);
-    if (playerByName) {
-        socket.join(gameCode);
-        socket.emit('joined', {
-            playerId: playerByName.id,
-            gameStatePublic: getGameStatePublic(game),
-            yourPrivateState: getPlayerPrivate(playerByName),
-        });
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
-        return;
-    }
-
-    socket.emit('error', { message: 'Cannot rejoin - session expired' });
+    console.log(`[RECONNECT] Player ${player.name} reconnected to lobby ${lobbyCode}`);
+    broadcastLobbyUpdate(io, lobby);
+    broadcastHostUpdate(io, lobby);
 }
 
 /**
- * Handle player leaving the game voluntarily
+ * Handle host joining a lobby (not as a player)
+ * Host connects to receive state updates without being added as a player
  */
-function handleLeaveGame(io: Server, socket: Socket): void {
-    const game = getGame();
-    if (!game) return;
-
-    const player = findPlayerBySocketId(game, socket.id);
-    if (!player) return;
-
-    // Only allow leaving during waiting phase
-    if (game.phase === 'waiting') {
-        // Remove player from game
-        game.players.delete(player.id);
-        socket.leave(game.gameCode);
-        console.log(`Player ${player.name} left the game`);
-
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
+function handleHostJoinLobby(io: Server, socket: Socket, lobbyCode: string, hostToken: string): void {
+    const lobby = lobbyManager.getLobby(lobbyCode);
+    if (!lobby) {
+        socket.emit('lobby_not_found', { code: lobbyCode });
+        return;
     }
+
+    // Validate host token
+    if (!lobbyManager.validateHostToken(lobbyCode, hostToken)) {
+        socket.emit('error', { message: 'Invalid host token' });
+        return;
+    }
+
+    // Mark socket as host and join the lobby room
+    socket.data.lobbyCode = lobbyCode;
+    socket.data.isHost = true;
+    socket.data.playerId = null; // Host is NOT a player
+    socket.join(getLobbyRoom(lobbyCode));
+
+    lobbyManager.updateActivity(lobbyCode);
+
+    console.log(`[HOST] Host joined lobby ${lobbyCode}`);
+
+    // Send host state immediately
+    socket.emit('host_joined', {
+        lobbyCode: lobby.code,
+        hostState: getHostState(lobby.state),
+    });
+
+    // Broadcast update so host sees current state
+    broadcastHostUpdate(io, lobby);
 }
 
-function handleSelectOpponent(io: Server, socket: Socket, opponentId: string): void {
-    const game = getGame();
-    if (!game || game.phase !== 'lobby') return;
+// ============ Helper: Get Lobby from Socket ============
 
+function getLobbyFromSocket(socket: Socket): lobbyManager.LobbyInstance | null {
+    const lobbyCode = socket.data.lobbyCode;
+    if (!lobbyCode) return null;
+    return lobbyManager.getLobby(lobbyCode);
+}
+
+// ============ Helper: Validate Host Token ============
+
+function validateHostAccess(socket: Socket, hostToken?: string): lobbyManager.LobbyInstance | null {
+    const lobby = getLobbyFromSocket(socket);
+    if (!lobby) return null;
+
+    // If hostToken provided, validate it
+    if (hostToken) {
+        if (!lobbyManager.validateHostToken(lobby.code, hostToken)) {
+            socket.emit('error', { message: 'Invalid host token' });
+            return null;
+        }
+        return lobby;
+    }
+
+    // If socket is marked as host
+    if (socket.data.isHost) {
+        return lobby;
+    }
+
+    socket.emit('error', { message: 'Not authorized' });
+    return null;
+}
+
+// ============ Player Event Handlers ============
+
+function handleSelectOpponent(io: Server, socket: Socket, opponentId: string): void {
+    const lobby = getLobbyFromSocket(socket);
+    if (!lobby || lobby.state.phase !== 'lobby') return;
+
+    const game = lobby.state;
     const player = findPlayerBySocketId(game, socket.id);
     if (!player) return;
 
     const result = selectOpponent(game, player.id, opponentId);
     if (result.success) {
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
+        lobbyManager.updateActivity(lobby.code);
+        broadcastLobbyUpdate(io, lobby);
+        broadcastHostUpdate(io, lobby);
 
         // If a duel was created (mutual selection), notify both players
         if (result.duel) {
@@ -365,27 +551,31 @@ function handleSelectOpponent(io: Server, socket: Socket, opponentId: string): v
 }
 
 function handleCancelSelection(io: Server, socket: Socket): void {
-    const game = getGame();
-    if (!game || game.phase !== 'lobby') return;
+    const lobby = getLobbyFromSocket(socket);
+    if (!lobby || lobby.state.phase !== 'lobby') return;
 
+    const game = lobby.state;
     const player = findPlayerBySocketId(game, socket.id);
     if (!player) return;
 
     cancelSelection(game, player.id);
-    broadcastLobbyUpdate(io, game);
-    broadcastHostUpdate(io, game);
+    lobbyManager.updateActivity(lobby.code);
+    broadcastLobbyUpdate(io, lobby);
+    broadcastHostUpdate(io, lobby);
 }
 
 function handleDeclineInvite(io: Server, socket: Socket, inviterId: string): void {
-    const game = getGame();
-    if (!game || game.phase !== 'lobby') return;
+    const lobby = getLobbyFromSocket(socket);
+    if (!lobby || lobby.state.phase !== 'lobby') return;
 
+    const game = lobby.state;
     const player = findPlayerBySocketId(game, socket.id);
     if (!player) return;
 
     declineInvite(game, player.id, inviterId);
-    broadcastLobbyUpdate(io, game);
-    broadcastHostUpdate(io, game);
+    lobbyManager.updateActivity(lobby.code);
+    broadcastLobbyUpdate(io, lobby);
+    broadcastHostUpdate(io, lobby);
 }
 
 function handleDuelAction(
@@ -396,194 +586,250 @@ function handleDuelAction(
     cardId?: string,
     cardIds?: string[]
 ): void {
-    console.log(`[handleDuelAction] Received: duelId=${duelId}, actionType=${actionType}, cardIds=${JSON.stringify(cardIds)}`);
+    const lobby = getLobbyFromSocket(socket);
+    if (!lobby) return;
 
-    const game = getGame();
-    if (!game) {
-        console.log('[handleDuelAction] No game found');
-        return;
-    }
-
-    console.log(`[handleDuelAction] Game phase: ${game.phase}`);
+    const game = lobby.state;
 
     // Allow duel actions in lobby phase (individual duels) or duel phase (legacy)
-    if (game.phase !== 'lobby' && game.phase !== 'duel') {
-        console.log(`[handleDuelAction] Wrong phase: ${game.phase}`);
-        return;
-    }
+    if (game.phase !== 'lobby' && game.phase !== 'duel') return;
 
     const player = findPlayerBySocketId(game, socket.id);
-    if (!player) {
-        console.log(`[handleDuelAction] Player not found for socket: ${socket.id}`);
-        return;
-    }
-    console.log(`[handleDuelAction] Player: ${player.name}`);
+    if (!player) return;
 
     const duel = game.duels.get(duelId);
-    if (!duel) {
-        console.log(`[handleDuelAction] Duel not found: ${duelId}`);
-        console.log(`[handleDuelAction] Available duels: ${Array.from(game.duels.keys()).join(', ')}`);
-        return;
-    }
-    if (duel.status !== 'in_progress') {
-        console.log(`[handleDuelAction] Duel not in progress: ${duel.status}`);
-        return;
-    }
+    if (!duel || duel.status !== 'in_progress') return;
 
     // Verify player is in this duel
-    if (duel.player1Id !== player.id && duel.player2Id !== player.id) {
-        console.log(`[handleDuelAction] Player ${player.id} not in duel (p1=${duel.player1Id}, p2=${duel.player2Id})`);
-        return;
-    }
+    if (duel.player1Id !== player.id && duel.player2Id !== player.id) return;
 
-    console.log(`[handleDuelAction] Submitting action...`);
     const result = submitDuelAction(game, duel, player.id, actionType, cardId, cardIds);
 
     if (!result.success) {
-        console.log(`[handleDuelAction] Action failed: ${result.error}`);
         socket.emit('error', { message: result.error });
         return;
     }
-    console.log(`[handleDuelAction] Action succeeded!`);
+
+    lobbyManager.updateActivity(lobby.code);
 
     // Send updated duel state
     socket.emit('duel_action_confirmed', { duelId });
 
     // Check if both players have submitted
     if (isDuelReady(duel)) {
-        resolveDuelAndNotify(io, game, duel);
+        resolveDuelAndNotify(io, lobby, duel);
     }
 
-    broadcastHostUpdate(io, game);
+    broadcastHostUpdate(io, lobby);
 }
 
-async function handleHostAuth(io: Server, socket: Socket, pin: string): Promise<void> {
-    const clientIP = normalizeIP(socket.handshake.address);
+function handleClaimLoot(io: Server, socket: Socket, duelId: string, cardId: string): void {
+    const lobby = getLobbyFromSocket(socket);
+    if (!lobby) return;
 
-    // Rate limit auth attempts to prevent brute-force
-    try {
-        await authRateLimiter.consume(clientIP);
-    } catch {
-        console.log(`[RATE-LIMIT] host_auth blocked for IP ${clientIP}`);
-        if (serverMetrics) serverMetrics.rateLimitBlocks++;
-        socket.emit('host_auth_failed', { message: 'Too many attempts. Please wait 5 minutes.' });
-        return;
-    }
+    const game = lobby.state;
+    const player = findPlayerBySocketId(game, socket.id);
+    if (!player) return;
 
-    if (pin !== CONFIG.HOST_PIN) {
-        socket.emit('host_auth_failed', { message: 'Invalid PIN' });
-        return;
-    }
+    const duel = game.duels.get(duelId);
+    if (!duel || duel.status !== 'resolved' || !duel.result) return;
 
-    hostSocketId = socket.id;
-    socket.join('host');
+    if (duel.result.winnerId !== player.id) return;
 
-    const game = getGame();
-    socket.emit('host_authed', {
-        hostState: game ? getHostState(game) : null,
+    const lootCards = duel.result.lootableCards;
+    if (!lootCards) return;
+
+    const cardIndex = lootCards.findIndex(c => c.id === cardId);
+    if (cardIndex === -1) return;
+
+    const card = lootCards[cardIndex];
+    lootCards.splice(cardIndex, 1);
+    player.numberCards.push(card);
+
+    console.log(`[LOOT] Player ${player.name} claimed card ${card.value} from duel ${duelId}`);
+
+    socket.emit('private_state_update', {
+        yourPrivateState: getPlayerPrivate(player)
     });
 }
 
-function handleHostCreateGame(io: Server, socket: Socket, gameCode: string): void {
-    if (socket.id !== hostSocketId) return;
+function handleLeaveGame(io: Server, socket: Socket): void {
+    const lobby = getLobbyFromSocket(socket);
+    if (!lobby) return;
 
-    // Validate game code
-    if (!gameCode || gameCode.trim().length < 2) {
-        socket.emit('error', { message: 'Game code must be at least 2 characters' });
-        return;
+    const game = lobby.state;
+    const player = findPlayerBySocketId(game, socket.id);
+    if (!player) return;
+
+    // Only allow leaving during waiting phase
+    if (game.phase === 'waiting') {
+        removePlayer(game, player.id);
+        socket.leave(getLobbyRoom(lobby.code));
+        socket.data.lobbyCode = null;
+        socket.data.playerId = null;
+        console.log(`Player ${player.name} left lobby ${lobby.code}`);
+
+        lobbyManager.updateActivity(lobby.code);
+        broadcastLobbyUpdate(io, lobby);
+        broadcastHostUpdate(io, lobby);
     }
-
-    const sanitizedCode = gameCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-    // Create new game
-    const game = resetGame(sanitizedCode);
-
-    console.log(`Host created new game: ${sanitizedCode}`);
-
-    // Notify host of new game state
-    socket.emit('host_game_created', {
-        gameCode: sanitizedCode,
-        hostState: getHostState(game),
-    });
 }
 
-function handleHostEndGame(io: Server, socket: Socket): void {
-    if (socket.id !== hostSocketId) return;
+// ============ Host Event Handlers (Per-Lobby) ============
 
-    const game = getGame();
+function handleHostStartGame(io: Server, socket: Socket, hostToken?: string): void {
+    const lobby = validateHostAccess(socket, hostToken);
+    if (!lobby) return;
 
-    // Clear any phase timer
-    if (phaseTimer) {
-        clearTimeout(phaseTimer);
-        phaseTimer = null;
+    const game = lobby.state;
+    const success = startGame(game);
+    if (success) {
+        lobby.status = 'in_game';
+        lobbyManager.updateActivity(lobby.code);
+
+        broadcastPhaseChange(io, lobby);
+        broadcastLobbyUpdate(io, lobby);
+        broadcastHostUpdate(io, lobby);
+
+        // Send private state to each player (roles assigned)
+        for (const player of game.players.values()) {
+            if (player.socketId) {
+                io.to(player.socketId).emit('private_state_update', {
+                    yourPrivateState: getPlayerPrivate(player),
+                });
+            }
+        }
+    } else {
+        socket.emit('error', { message: 'Cannot start game (need at least 4 players)' });
+    }
+}
+
+function handleHostForcePhase(io: Server, socket: Socket, phase: string, hostToken?: string): void {
+    const lobby = validateHostAccess(socket, hostToken);
+    if (!lobby) return;
+
+    const game = lobby.state;
+
+    // Clear existing timer
+    const existingTimer = phaseTimers.get(lobby.code);
+    if (existingTimer) {
+        clearTimeout(existingTimer);
+        phaseTimers.delete(lobby.code);
+    }
+
+    switch (phase) {
+        case 'duel':
+            if (game.phase === 'lobby') {
+                startDuelPhase(game);
+                startPhaseTimer(io, lobby);
+            }
+            break;
+        case 'meeting':
+            if (game.phase === 'duel') {
+                resolvePendingDuels(io, lobby);
+                startMeetingPhase(game);
+                startPhaseTimer(io, lobby);
+            }
+            break;
+        case 'lobby':
+            if (game.phase === 'meeting') {
+                startNextRound(game);
+            }
+            break;
+    }
+
+    lobbyManager.updateActivity(lobby.code);
+    broadcastPhaseChange(io, lobby);
+    broadcastLobbyUpdate(io, lobby);
+    broadcastHostUpdate(io, lobby);
+}
+
+function handleHostKickPlayer(io: Server, socket: Socket, playerId: string, hostToken?: string): void {
+    const lobby = validateHostAccess(socket, hostToken);
+    if (!lobby) return;
+
+    const game = lobby.state;
+    const player = getPlayer(game, playerId);
+    if (!player) return;
+
+    player.status = 'eliminated';
+    player.eliminationReason = 'Kicked by host';
+
+    if (player.socketId) {
+        io.to(player.socketId).emit('eliminated', { reason: 'Kicked by host' });
+    }
+
+    lobbyManager.updateActivity(lobby.code);
+    broadcastLobbyUpdate(io, lobby);
+    broadcastHostUpdate(io, lobby);
+}
+
+function handleHostEndGame(io: Server, socket: Socket, hostToken?: string): void {
+    const lobby = validateHostAccess(socket, hostToken);
+    if (!lobby) return;
+
+    // Clear phase timer
+    const existingTimer = phaseTimers.get(lobby.code);
+    if (existingTimer) {
+        clearTimeout(existingTimer);
+        phaseTimers.delete(lobby.code);
     }
 
     // Notify all players that game has ended
-    if (game) {
-        io.to(game.gameCode).emit('game_force_ended', {
+    io.to(getLobbyRoom(lobby.code)).emit('game_force_ended', {
             message: 'Game has been terminated by host'
         });
 
-        // Disconnect all players from the game room
-        io.in(game.gameCode).socketsLeave(game.gameCode);
-    }
+    // Delete the lobby
+    lobbyManager.deleteLobby(lobby.code);
 
-    // Clear the game
-    clearGame();
+    console.log(`Host force ended lobby ${lobby.code}`);
 
-    console.log('Host force ended the game');
-
-    // Notify host
     socket.emit('host_game_ended', {
         message: 'Game terminated successfully'
     });
 }
 
-function handleHostIntroComplete(io: Server, socket: Socket): void {
-    if (socket.id !== hostSocketId) return;
+function handleHostIntroComplete(io: Server, socket: Socket, hostToken?: string): void {
+    const lobby = validateHostAccess(socket, hostToken);
+    if (!lobby) return;
 
-    const game = getGame();
-    if (!game) return;
-
+    const game = lobby.state;
     const success = completeIntro(game);
     if (success) {
-        console.log('Host completed intro video, transitioning to lobby');
-        broadcastPhaseChange(io, game);
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
+        console.log(`Host completed intro video for lobby ${lobby.code}`);
+        lobbyManager.updateActivity(lobby.code);
+        broadcastPhaseChange(io, lobby);
+        broadcastLobbyUpdate(io, lobby);
+        broadcastHostUpdate(io, lobby);
     }
 }
 
-function handleHostUpdateSettings(io: Server, socket: Socket, settings: Partial<import('./types').GameSettings>): void {
-    if (socket.id !== hostSocketId) return;
+function handleHostUpdateSettings(io: Server, socket: Socket, settings: Partial<import('./types').GameSettings>, hostToken?: string): void {
+    const lobby = validateHostAccess(socket, hostToken);
+    if (!lobby) return;
 
-    const game = getGame();
-    if (!game) return;
-
+    const game = lobby.state;
     const success = updateSettings(game, settings);
     if (success) {
-        console.log('Host updated settings:', game.settings);
-        broadcastHostUpdate(io, game);
+        console.log(`Host updated settings for lobby ${lobby.code}`);
+        lobbyManager.updateActivity(lobby.code);
+        broadcastHostUpdate(io, lobby);
     }
 }
 
-/**
- * Host has completed the reveal animation - now send results to players
- */
-function handleHostRevealComplete(io: Server, socket: Socket): void {
-    if (socket.id !== hostSocketId) return;
+function handleHostRevealComplete(io: Server, socket: Socket, hostToken?: string): void {
+    const lobby = validateHostAccess(socket, hostToken);
+    if (!lobby || lobby.state.phase !== 'ended') return;
 
-    const game = getGame();
-    if (!game || game.phase !== 'ended') return;
-
-    console.log('[HOST] Reveal complete - sending results to players');
+    const game = lobby.state;
+    console.log(`[HOST] Reveal complete for lobby ${lobby.code}`);
 
     const finalReveal = getFinalReveal(game);
 
-    // Now send game_ended to all players
+    // Send game_ended to all players
     for (const player of game.players.values()) {
         if (player.socketId) {
-            // Eliminated players always lose, regardless of team outcome
             let yourOutcome: 'won' | 'lost' | 'tie';
             if (player.status === 'eliminated') {
                 yourOutcome = 'lost';
@@ -602,34 +848,31 @@ function handleHostRevealComplete(io: Server, socket: Socket): void {
             });
         }
     }
+
+    lobby.status = 'ended';
 }
 
-/**
- * Host restarts game to waiting phase (Play Again)
- * Keeps players but resets all game state
- */
-function handleHostRestartGame(io: Server, socket: Socket): void {
-    if (socket.id !== hostSocketId) return;
+function handleHostRestartGame(io: Server, socket: Socket, hostToken?: string): void {
+    const lobby = validateHostAccess(socket, hostToken);
+    if (!lobby) return;
 
-    const game = getGame();
-    if (!game) return;
-
-    console.log('[HOST] Restarting game to waiting phase (Play Again)');
+    const game = lobby.state;
+    console.log(`[HOST] Restarting lobby ${lobby.code}`);
 
     const success = restartGameToWaiting(game);
     if (success) {
-        // Broadcast phase change to all players (they'll see waiting phase)
-        broadcastPhaseChange(io, game);
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
+        lobby.status = 'waiting';
+        lobbyManager.updateActivity(lobby.code);
 
-        // Send special event to players so they know lobby is ready
-        io.to(game.gameCode).emit('lobby_restarted', {
+        broadcastPhaseChange(io, lobby);
+        broadcastLobbyUpdate(io, lobby);
+        broadcastHostUpdate(io, lobby);
+
+        io.to(getLobbyRoom(lobby.code)).emit('lobby_restarted', {
             message: 'The host has started a new game. Return to the lobby to play again!',
-            gameCode: game.gameCode,
+            lobbyCode: lobby.code,
         });
 
-        // Notify host
         socket.emit('host_game_restarted', {
             message: 'Lobby restarted successfully',
             playerCount: game.players.size,
@@ -637,109 +880,85 @@ function handleHostRestartGame(io: Server, socket: Socket): void {
     }
 }
 
-function handleHostStartGame(io: Server, socket: Socket): void {
-    if (socket.id !== hostSocketId) return;
+// ============ Admin Dashboard Handlers (Global) ============
 
-    const game = getGame();
-    if (!game) return;
+async function handleAdminAuth(io: Server, socket: Socket, pin: string): Promise<void> {
+    const clientIP = normalizeIP(socket.handshake.address);
 
-    const success = startGame(game);
-    if (success) {
-        broadcastPhaseChange(io, game);
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
-
-        // Send private state to each player (roles assigned)
-        for (const player of game.players.values()) {
-            if (player.socketId) {
-                io.to(player.socketId).emit('private_state_update', {
-                    yourPrivateState: getPlayerPrivate(player),
-                });
-            }
-        }
-    } else {
-        socket.emit('error', { message: 'Cannot start game (need at least 6 players)' });
+    try {
+        await authRateLimiter.consume(clientIP);
+    } catch {
+        console.log(`[RATE-LIMIT] host_auth blocked for IP ${clientIP}`);
+        if (serverMetrics) serverMetrics.rateLimitBlocks++;
+        socket.emit('host_auth_failed', { message: 'Too many attempts. Please wait 5 minutes.' });
+        return;
     }
+
+    if (pin !== CONFIG.HOST_PIN) {
+        socket.emit('host_auth_failed', { message: 'Invalid PIN' });
+        return;
+    }
+
+    adminHostSocketId = socket.id;
+    socket.join('admin');
+
+    // Send current state of all lobbies
+    const lobbies = lobbyManager.getAllLobbies();
+    socket.emit('host_authed', {
+        lobbies: lobbies.map(l => ({
+            code: l.code,
+            status: l.status,
+            playerCount: l.state.players.size,
+            phase: l.state.phase,
+            createdAt: l.createdAt,
+        })),
+    });
 }
 
-function handleHostForcePhase(io: Server, socket: Socket, phase: string): void {
-    if (socket.id !== hostSocketId) return;
-
-    const game = getGame();
-    if (!game) return;
-
-    // Clear existing timer
-    if (phaseTimer) {
-        clearTimeout(phaseTimer);
-        phaseTimer = null;
+function handleAdminGetLobbies(io: Server, socket: Socket): void {
+    if (socket.id !== adminHostSocketId) {
+        socket.emit('error', { message: 'Not authorized' });
+        return;
     }
 
-    switch (phase) {
-        case 'duel':
-            if (game.phase === 'lobby') {
-                startDuelPhase(game);
-                startPhaseTimer(io, game);
-            }
-            break;
-        case 'meeting':
-            if (game.phase === 'duel') {
-                resolvePendingDuels(io, game);
-                startMeetingPhase(game);
-                startPhaseTimer(io, game);
-            }
-            break;
-        case 'lobby':
-            if (game.phase === 'meeting') {
-                startNextRound(game);
-            }
-            break;
-    }
-
-    broadcastPhaseChange(io, game);
-    broadcastLobbyUpdate(io, game);
-    broadcastHostUpdate(io, game);
+    const lobbies = lobbyManager.getAllLobbies();
+    socket.emit('admin_lobbies', {
+        lobbies: lobbies.map(l => ({
+            code: l.code,
+            status: l.status,
+            playerCount: l.state.players.size,
+            phase: l.state.phase,
+            createdAt: l.createdAt,
+            lastActivityAt: l.lastActivityAt,
+            hostState: getHostState(l.state),
+        })),
+    });
 }
 
-function handleHostKickPlayer(io: Server, socket: Socket, playerId: string): void {
-    if (socket.id !== hostSocketId) return;
-
-    const game = getGame();
-    if (!game) return;
-
-    const player = getPlayer(game, playerId);
-    if (!player) return;
-
-    player.status = 'eliminated';
-    player.eliminationReason = 'Kicked by host';
-
-    if (player.socketId) {
-        io.to(player.socketId).emit('eliminated', { reason: 'Kicked by host' });
-    }
-
-    broadcastLobbyUpdate(io, game);
-    broadcastHostUpdate(io, game);
-}
+// ============ Disconnect Handler ============
 
 function handleClientDisconnect(io: Server, socket: Socket): void {
     console.log(`Client disconnected: ${socket.id}`);
 
-    if (socket.id === hostSocketId) {
-        hostSocketId = null;
+    if (socket.id === adminHostSocketId) {
+        adminHostSocketId = null;
     }
 
-    const game = getGame();
-    if (!game) return;
+    const lobby = getLobbyFromSocket(socket);
+    if (!lobby) return;
 
+    const game = lobby.state;
     const player = handleDisconnect(game, socket.id);
     if (player) {
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
+        broadcastLobbyUpdate(io, lobby);
+        broadcastHostUpdate(io, lobby);
     }
 }
 
 // ============ Broadcast Helpers ============
 
-function broadcastLobbyUpdate(io: Server, game: GameState): void {
+function broadcastLobbyUpdate(io: Server, lobby: lobbyManager.LobbyInstance): void {
+    const game = lobby.state;
     const playersPublic: PlayerPublic[] = [];
 
     for (const player of game.players.values()) {
@@ -748,7 +967,7 @@ function broadcastLobbyUpdate(io: Server, game: GameState): void {
 
     const alivePlayers = Array.from(game.players.values()).filter(p => p.status === 'alive');
 
-    io.to(game.gameCode).emit('lobby_update', {
+    io.to(getLobbyRoom(lobby.code)).emit('lobby_update', {
         playersPublic,
         pairingStatus: {
             totalPlayers: alivePlayers.length,
@@ -758,12 +977,14 @@ function broadcastLobbyUpdate(io: Server, game: GameState): void {
     });
 }
 
-function broadcastPhaseChange(io: Server, game: GameState): void {
-    io.to(game.gameCode).emit('phase_change', {
+function broadcastPhaseChange(io: Server, lobby: lobbyManager.LobbyInstance): void {
+    const game = lobby.state;
+
+    io.to(getLobbyRoom(lobby.code)).emit('phase_change', {
         phase: game.phase,
         round: game.round,
         endsAt: game.phaseEndsAt,
-        requireZombieWin: game.settings.requireZombieWin, // Include setting for competitive mode
+        requireZombieWin: game.settings.requireZombieWin,
     });
 
     // If duel phase, send duel assignments
@@ -796,26 +1017,36 @@ function broadcastPhaseChange(io: Server, game: GameState): void {
     // If meeting phase, send summary
     if (game.phase === 'meeting') {
         const events = getCurrentRoundEvents(game);
-        io.to(game.gameCode).emit('meeting_summary', {
+        io.to(getLobbyRoom(lobby.code)).emit('meeting_summary', {
             round: game.round,
             publicEvents: events,
         });
     }
-
-    // NOTE: If game ended, DON'T send results to players yet.
-    // Host reveal animation plays first, then host emits 'host_reveal_complete' 
-    // which triggers handleHostRevealComplete to send game_ended to players.
-    // This prevents spoilers - players wait while the big screen does the countdown reveal.
 }
 
-function broadcastHostUpdate(io: Server, game: GameState): void {
-    io.to('host').emit('host_state_update', {
+function broadcastHostUpdate(io: Server, lobby: lobbyManager.LobbyInstance): void {
+    const game = lobby.state;
+
+    // Send to the lobby room (the host socket is in this room)
+    io.to(getLobbyRoom(lobby.code)).emit('host_state_update', {
         fullState: getHostState(game),
         publicEvents: getCurrentRoundEvents(game),
     });
+
+    // Also send to admin room
+    io.to('admin').emit('admin_lobby_update', {
+        code: lobby.code,
+        status: lobby.status,
+        playerCount: game.players.size,
+        phase: game.phase,
+        hostState: getHostState(game),
+    });
 }
 
-function resolveDuelAndNotify(io: Server, game: GameState, duel: Duel): void {
+// ============ Duel Resolution ============
+
+function resolveDuelAndNotify(io: Server, lobby: lobbyManager.LobbyInstance, duel: Duel): void {
+    const game = lobby.state;
     resolveDuel(game, duel);
 
     const player1 = getPlayer(game, duel.player1Id);
@@ -824,7 +1055,7 @@ function resolveDuelAndNotify(io: Server, game: GameState, duel: Duel): void {
     // Clear duel IDs and mark as having dueled
     if (player1) {
         player1.currentDuelId = null;
-        player1.isPaired = true; // Keep paired to indicate "completed duel this round"
+        player1.isPaired = true;
     }
     if (player2) {
         player2.currentDuelId = null;
@@ -848,31 +1079,26 @@ function resolveDuelAndNotify(io: Server, game: GameState, duel: Duel): void {
     }
 
     // Check for eliminated players
-    if (player1?.status === 'eliminated') {
-        io.to(player1.socketId!).emit('eliminated', { reason: player1.eliminationReason });
+    if (player1?.status === 'eliminated' && player1.socketId) {
+        io.to(player1.socketId).emit('eliminated', { reason: player1.eliminationReason });
     }
-    if (player2?.status === 'eliminated') {
-        io.to(player2.socketId!).emit('eliminated', { reason: player2.eliminationReason });
-    }
-
-    // CRITICAL: Check for annihilation (all alive players are zombies)
-    if (checkAnnihilation(io, game)) {
-        return; // Game ended due to annihilation, don't continue to round check
+    if (player2?.status === 'eliminated' && player2.socketId) {
+        io.to(player2.socketId).emit('eliminated', { reason: player2.eliminationReason });
     }
 
-    // Check if all duels for this round are complete
-    checkRoundComplete(io, game);
+    // Check for annihilation
+    if (checkAnnihilation(io, lobby)) {
+        return;
+    }
+
+    // Check if all duels complete
+    checkRoundComplete(io, lobby);
 }
 
-/**
- * Check if all alive players are zombies - triggers immediate game end
- * This implements the "annihilation rule" where if everyone becomes infected, everyone dies
- */
-function checkAnnihilation(io: Server, game: GameState): boolean {
-    // Only check if annihilation rule is enabled
-    if (!game.settings.annihilationRule) return false;
+function checkAnnihilation(io: Server, lobby: lobbyManager.LobbyInstance): boolean {
+    const game = lobby.state;
 
-    // Only check during active gameplay (not already ended)
+    if (!game.settings.annihilationRule) return false;
     if (game.phase === 'ended' || game.phase === 'waiting') return false;
 
     const alivePlayers = getAlivePlayers(game);
@@ -881,13 +1107,10 @@ function checkAnnihilation(io: Server, game: GameState): boolean {
     const humans = alivePlayers.filter(p => p.role === 'human');
     const zombies = alivePlayers.filter(p => p.role === 'zombie');
 
-    // If there are still humans alive, no annihilation
     if (humans.length > 0) return false;
 
-    // All alive players are zombies - trigger annihilation!
-    console.log('[ANNIHILATION] All players are infected! Triggering annihilation sequence.');
+    console.log(`[ANNIHILATION] All players infected in lobby ${lobby.code}!`);
 
-    // Add dramatic event
     game.events.push({
         id: `annihilation-${game.round}`,
         round: game.round,
@@ -895,27 +1118,24 @@ function checkAnnihilation(io: Server, game: GameState): boolean {
         message: 'THE INFECTION HAS CONSUMED ALL. EVERYONE PERISHED.',
     });
 
-    // Step 1: Transition to meeting phase first (calls players together)
     startMeetingPhase(game);
-    broadcastPhaseChange(io, game);
-    broadcastLobbyUpdate(io, game);
-    broadcastHostUpdate(io, game);
+    broadcastPhaseChange(io, lobby);
+    broadcastLobbyUpdate(io, lobby);
+    broadcastHostUpdate(io, lobby);
 
-    // Step 2: After 3 seconds in meeting, send cryptic message to host
     setTimeout(() => {
-        io.to('host').emit('host_annihilation', {
+        io.to(getLobbyRoom(lobby.code)).emit('host_annihilation', {
             message: 'SOMETHING IS WRONG...',
             zombieCount: zombies.length,
         });
 
-        // Step 3: After another 3 seconds, end the game
         setTimeout(() => {
             endGame(game);
-            broadcastPhaseChange(io, game);
-            broadcastHostUpdate(io, game);
+            lobby.status = 'ended';
+            broadcastPhaseChange(io, lobby);
+            broadcastHostUpdate(io, lobby);
 
-            // Update annihilation message for the final reveal
-            io.to('host').emit('host_annihilation', {
+            io.to(getLobbyRoom(lobby.code)).emit('host_annihilation', {
                 message: 'ALL PLAYERS HAVE BEEN INFECTED. EVERYONE DIED.',
                 zombieCount: zombies.length,
             });
@@ -925,88 +1145,55 @@ function checkAnnihilation(io: Server, game: GameState): boolean {
     return true;
 }
 
-/**
- * Check if all alive players have completed their duels, transition to meeting if so
- * 
- * Logic: Round is complete when:
- * 1. No players are currently in duels (activeDuels === 0)
- * 2. At most 1 unpaired player remains (the odd one out for odd player counts)
- * 
- * An "unpaired" player is one who hasn't completed a duel this round:
- * - isPaired=false means they haven't started any duel
- * - currentDuelId !== null means they're currently in a duel
- */
-function checkRoundComplete(io: Server, game: GameState): void {
+function checkRoundComplete(io: Server, lobby: lobbyManager.LobbyInstance): void {
+    const game = lobby.state;
     const alivePlayers = getAlivePlayers(game);
 
-    // If all players are dead, end the game immediately
     if (alivePlayers.length === 0) {
-        console.log('[checkRoundComplete] All players dead! Ending game.');
+        console.log(`[checkRoundComplete] All players dead in lobby ${lobby.code}!`);
         endGame(game);
-        broadcastPhaseChange(io, game);
-        broadcastHostUpdate(io, game);
+        lobby.status = 'ended';
+        broadcastPhaseChange(io, lobby);
+        broadcastHostUpdate(io, lobby);
         return;
     }
 
-    // If only 1 player left, they win - end the game
     if (alivePlayers.length === 1) {
-        console.log('[checkRoundComplete] Only 1 player remaining! They win. Ending game.');
+        console.log(`[checkRoundComplete] Only 1 player remaining in lobby ${lobby.code}!`);
         endGame(game);
-        broadcastPhaseChange(io, game);
-        broadcastHostUpdate(io, game);
+        lobby.status = 'ended';
+        broadcastPhaseChange(io, lobby);
+        broadcastHostUpdate(io, lobby);
         return;
     }
 
-    // All alive players are eligible (sitting out rule removed)
-    const eligiblePlayers = alivePlayers;
+    const playersInDuel = alivePlayers.filter(p => p.currentDuelId !== null);
+    const unpairedPlayers = alivePlayers.filter(p => !p.isPaired && p.currentDuelId === null);
+    const completedPlayers = alivePlayers.filter(p => p.isPaired && p.currentDuelId === null);
 
-    // Count players currently IN a duel (currentDuelId is set)
-    const playersInDuel = eligiblePlayers.filter(p => p.currentDuelId !== null);
-
-    // Count unpaired players who haven't started/completed a duel yet
-    // isPaired=false means they haven't entered any duel this round
-    const unpairedPlayers = eligiblePlayers.filter(p => !p.isPaired && p.currentDuelId === null);
-
-    // Count players who completed their duel (isPaired=true AND currentDuelId=null)
-    const completedPlayers = eligiblePlayers.filter(p => p.isPaired && p.currentDuelId === null);
-
-    console.log(`[checkRoundComplete] alive=${alivePlayers.length}, eligible=${eligiblePlayers.length}`);
-    console.log(`[checkRoundComplete] inDuel=${playersInDuel.length}, unpaired=${unpairedPlayers.length}, completed=${completedPlayers.length}`);
-    console.log(`[checkRoundComplete] Players:`, eligiblePlayers.map(p => ({
-        name: p.name,
-        isPaired: p.isPaired,
-        status: p.status,
-        duelId: p.currentDuelId
-    })));
-
-    // Round is complete when:
-    // 1. No active duels (no one in the middle of fighting)
-    // 2. At most 1 unpaired player (handles odd player count - that player is "safe" this round)
-    // 3. At least some duels happened (eligiblePlayers > 1 means duels should occur)
     const noActiveDuels = playersInDuel.length === 0;
     const allPairedOrOddOneOut = unpairedPlayers.length <= 1;
     const duelsHappened = completedPlayers.length > 0;
 
     if (noActiveDuels && allPairedOrOddOneOut && duelsHappened) {
-        console.log('[checkRoundComplete] Transitioning to meeting phase!');
-        // Transition to meeting phase
+        console.log(`[checkRoundComplete] Transitioning to meeting in lobby ${lobby.code}`);
         startMeetingPhase(game);
-        broadcastPhaseChange(io, game);
-        broadcastLobbyUpdate(io, game);
-        broadcastHostUpdate(io, game);
-        startPhaseTimer(io, game);
+        broadcastPhaseChange(io, lobby);
+        broadcastLobbyUpdate(io, lobby);
+        broadcastHostUpdate(io, lobby);
+        startPhaseTimer(io, lobby);
     }
 }
 
-function resolvePendingDuels(io: Server, game: GameState): void {
+function resolvePendingDuels(io: Server, lobby: lobbyManager.LobbyInstance): void {
+    const game = lobby.state;
+
     for (const duelId of game.currentRoundDuels) {
         const duel = game.duels.get(duelId);
         if (!duel || duel.status !== 'in_progress') continue;
 
-        // Auto-submit for disconnected players
         autoSubmitForDisconnected(game, duel);
 
-        // If still not ready, force resolve (both forfeit)
         if (!isDuelReady(duel)) {
             duel.status = 'resolved';
             duel.result = {
@@ -1018,45 +1205,52 @@ function resolvePendingDuels(io: Server, game: GameState): void {
                 eliminations: [],
             };
         } else {
-            resolveDuelAndNotify(io, game, duel);
+            resolveDuelAndNotify(io, lobby, duel);
         }
     }
 }
 
 // ============ Phase Timer ============
 
-function startPhaseTimer(io: Server, game: GameState): void {
-    if (phaseTimer) {
-        clearTimeout(phaseTimer);
+function startPhaseTimer(io: Server, lobby: lobbyManager.LobbyInstance): void {
+    const game = lobby.state;
+
+    const existingTimer = phaseTimers.get(lobby.code);
+    if (existingTimer) {
+        clearTimeout(existingTimer);
     }
 
     const duration = game.phase === 'duel'
         ? CONFIG.DUEL_DURATION_SEC * 1000
         : CONFIG.MEETING_DURATION_SEC * 1000;
 
-    phaseTimer = setTimeout(() => {
-        if (!game) return;
+    const timer = setTimeout(() => {
+        const currentLobby = lobbyManager.getLobby(lobby.code);
+        if (!currentLobby) return;
 
-        if (game.phase === 'duel') {
-            // Resolve all pending duels and move to meeting
-            resolvePendingDuels(io, game);
-            startMeetingPhase(game);
-            broadcastPhaseChange(io, game);
-            broadcastHostUpdate(io, game);
-            startPhaseTimer(io, game);
-        } else if (game.phase === 'meeting') {
-            // Move to next round lobby
-            startNextRound(game);
-            broadcastPhaseChange(io, game);
-            broadcastLobbyUpdate(io, game);
-            broadcastHostUpdate(io, game);
+        const currentGame = currentLobby.state;
+
+        if (currentGame.phase === 'duel') {
+            resolvePendingDuels(io, currentLobby);
+            startMeetingPhase(currentGame);
+            broadcastPhaseChange(io, currentLobby);
+            broadcastHostUpdate(io, currentLobby);
+            startPhaseTimer(io, currentLobby);
+        } else if (currentGame.phase === 'meeting') {
+            startNextRound(currentGame);
+            broadcastPhaseChange(io, currentLobby);
+            broadcastLobbyUpdate(io, currentLobby);
+            broadcastHostUpdate(io, currentLobby);
         }
+
+        phaseTimers.delete(lobby.code);
     }, duration);
+
+    phaseTimers.set(lobby.code, timer);
 }
 
-/**
- * Get available cards for a player in current duel
- */
+// ============ Export for testing ============
+
 export function getPlayerDuelInfo(game: GameState, playerId: string): {
     actions: string[];
     validCards: any[];
@@ -1071,67 +1265,4 @@ export function getPlayerDuelInfo(game: GameState, playerId: string): {
         actions: getAvailableActions(player, duel),
         validCards: getValidNumberCards(player, duel),
     };
-}
-
-/**
- * Handle player claiming loot card from opponent
- */
-function handleClaimLoot(io: Server, socket: Socket, duelId: string, cardId: string): void {
-    const game = getGame();
-    if (!game) return;
-
-    const player = findPlayerBySocketId(game, socket.id);
-    if (!player) return;
-
-    const duel = game.duels.get(duelId);
-    if (!duel || duel.status !== 'resolved' || !duel.result) return;
-
-    if (duel.result.winnerId !== player.id) return;
-
-    const lootCards = duel.result.lootableCards;
-    if (!lootCards) return;
-
-    const cardIndex = lootCards.findIndex(c => c.id === cardId);
-    if (cardIndex === -1) return;
-
-    const card = lootCards[cardIndex];
-    // Remove from lootable (prevent double claim)
-    lootCards.splice(cardIndex, 1);
-
-    // Add to player hand
-    player.numberCards.push(card);
-
-    console.log(`[LOOT] Player ${player.name} claimed card ${card.value} from duel ${duelId}`);
-
-    // Update player private state
-    socket.emit('private_state_update', {
-        yourPrivateState: getPlayerPrivate(player)
-    });
-
-    // Also update game state to remove the lootable option from UI if desired,
-    // though private state update handles the hand.
-    // If we want to hide the "Pick a card" UI, the client essentially re-checks the result.
-    // But result still says 'lootableCards'. We modified it in place, so the NEXT time client gets state it's gone?
-    // DuelResult is sent in 'game_ended' or 'private_state_update'?
-    // Client has `duelResult` in context. We need to push an update to that context.
-    // The private state includes `currentDuel`? No.
-    // getPlayerPrivate includes `currentDuelId`.
-    // We should emit an update for the duel or just let the hand update implicitly tell the user functionality is done?
-    // A specific 'loot_claimed' event might be cleaner but let's stick to state updates.
-    // If I modify `duel.result.lootableCards`, does the client see it? 
-    // Only if I resend the duel result.
-    // getPlayerDuelInfo returns actions/validCards. 
-    // We probably should re-emit the duel result to the player so the UI updates.
-    // Wait, `getDuelResultPrivate` logic returns `lootableCards`.
-    // So if I modify it in `handleClaimLoot` (splice), the next `getDuelResultPrivate` call will reflect that.
-    // `io.to(player.socketId).emit('private_state_update', ...)` calls `getPlayerPrivate`.
-    // `getPlayerPrivate` does NOT return duel result.
-    // `handleDuelAction` emits `duel_update` usually.
-    // I should emit `duel_update` to the player.
-    // But `duel_update` is usually for public updates.
-    // I'll emit `private_state_update` AND a custom event or rely on `duel_result` update?
-    // Looking at `socketHandlers.ts`, `resolveDuel` emits `duel_completed` or just phase change?
-    // It emits `duel_update` to room.
-
-    // I'll assume updating `lootableCards` in memory and re-emitting state is enough if the client logic checks empty list.
 }

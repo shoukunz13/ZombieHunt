@@ -2,9 +2,8 @@
  * ZOMBIE HUNT — Join Screen
  * 
  * Design: Black screen, terminal aesthetic
- * - Centered title
- * - Small threatening subtitle
- * - Terminal-style input
+ * - Lobby code displayed prominently (from URL)
+ * - Name input only
  * - Red blinking cursor effect
  */
 
@@ -15,19 +14,25 @@ import { ConnectionStatus, DisplayTitle, SystemMessage, Spinner } from '../compo
 
 export function JoinScreen() {
     const navigate = useNavigate();
-    const { isConnected, playerId, privateState, joinGame, error, clearError } = useGame();
+    const { isConnected, playerId, privateState, joinGame, error, clearError, lobbyCode, hasSession } = useGame();
 
     const [name, setName] = useState('');
-    const [gameCode, setGameCode] = useState('');
     const [isJoining, setIsJoining] = useState(false);
 
     // Navigate when joined
     useEffect(() => {
         if (playerId && privateState) {
             setIsJoining(false);
-            navigate('/lobby');
+            navigate(`/game/${lobbyCode}/lobby`);
         }
-    }, [playerId, privateState, navigate]);
+    }, [playerId, privateState, navigate, lobbyCode]);
+
+    // Auto-reconnect if session exists
+    useEffect(() => {
+        if (hasSession && playerId && privateState) {
+            navigate(`/game/${lobbyCode}/lobby`);
+        }
+    }, [hasSession, playerId, privateState, navigate, lobbyCode]);
 
     // Handle errors
     useEffect(() => {
@@ -38,11 +43,11 @@ export function JoinScreen() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim() || !gameCode.trim() || !isConnected) return;
+        if (!name.trim() || !isConnected) return;
 
         clearError();
         setIsJoining(true);
-        joinGame(gameCode.trim().toUpperCase(), name.trim());
+        joinGame(name.trim());
     };
 
     return (
@@ -54,6 +59,33 @@ export function JoinScreen() {
                     <SystemMessage>ENTER AT YOUR OWN RISK</SystemMessage>
                 </div>
 
+                {/* Lobby Code Display */}
+                {lobbyCode && (
+                    <div style={{
+                        marginBottom: 'var(--space-xl)',
+                        padding: 'var(--space-lg)',
+                        border: '2px solid var(--terminal-green)',
+                        background: 'rgba(57, 255, 20, 0.05)'
+                    }}>
+                        <p className="text-system" style={{
+                            fontSize: 'var(--font-size-xs)',
+                            color: 'var(--text-muted)',
+                            marginBottom: 'var(--space-xs)'
+                        }}>
+                            LOBBY CODE
+                        </p>
+                        <p style={{
+                            fontSize: 'var(--font-size-3xl)',
+                            fontFamily: 'var(--font-mono)',
+                            color: 'var(--terminal-green)',
+                            letterSpacing: '0.3em',
+                            textAlign: 'center'
+                        }}>
+                            {lobbyCode}
+                        </p>
+                    </div>
+                )}
+
                 {/* Connection Status */}
                 <div style={{ marginBottom: 'var(--space-xl)' }}>
                     <ConnectionStatus isConnected={isConnected} />
@@ -62,7 +94,7 @@ export function JoinScreen() {
                 {/* Join Form */}
                 <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: '320px' }}>
                     {/* Name Input */}
-                    <div style={{ marginBottom: 'var(--space-md)' }}>
+                    <div style={{ marginBottom: 'var(--space-lg)' }}>
                         <label className="text-system" style={{
                             display: 'block',
                             marginBottom: 'var(--space-xs)',
@@ -79,27 +111,7 @@ export function JoinScreen() {
                             maxLength={16}
                             autoComplete="off"
                             disabled={isJoining}
-                        />
-                    </div>
-
-                    {/* Game Code Input */}
-                    <div style={{ marginBottom: 'var(--space-lg)' }}>
-                        <label className="text-system" style={{
-                            display: 'block',
-                            marginBottom: 'var(--space-xs)',
-                            fontSize: 'var(--font-size-xs)'
-                        }}>
-                            ACCESS CODE
-                        </label>
-                        <input
-                            type="text"
-                            className="input"
-                            placeholder="ENTER CODE_"
-                            value={gameCode}
-                            onChange={(e) => setGameCode(e.target.value.toUpperCase())}
-                            maxLength={12}
-                            autoComplete="off"
-                            disabled={isJoining}
+                            autoFocus
                         />
                     </div>
 
@@ -121,7 +133,7 @@ export function JoinScreen() {
                     <button
                         type="submit"
                         className="btn btn-primary btn-block"
-                        disabled={!isConnected || !name.trim() || !gameCode.trim() || isJoining}
+                        disabled={!isConnected || !name.trim() || isJoining}
                     >
                         {isJoining ? (
                             <>
@@ -131,6 +143,15 @@ export function JoinScreen() {
                         ) : (
                             'ENTER GAME'
                         )}
+                    </button>
+
+                    <button
+                        type="button"
+                        className="btn btn-secondary btn-block"
+                        onClick={() => navigate('/join')}
+                        style={{ marginTop: 'var(--space-md)' }}
+                    >
+                        BACK
                     </button>
                 </form>
 

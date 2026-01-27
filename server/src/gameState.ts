@@ -1,6 +1,10 @@
 /**
  * Zombie Hunt - Game State Manager
  * Central game state with all player, duel, and phase management.
+ * 
+ * NOTE: Multi-tenant architecture - no global game state.
+ * All functions receive GameState as a parameter.
+ * Game state is managed by LobbyManager.
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -14,16 +18,15 @@ import {
     dealNumberCards, createZombieCard, createVaccineCard,
     distributeVaccines, shuffleArray, generateNumberDeck
 } from './cards';
-import { persistState, loadPersistedState } from './persistence';
 
-// Store for all games (we only support one game at a time for simplicity)
-let currentGame: GameState | null = null;
+// ============ Game State Creation ============
+// NOTE: These are now called by LobbyManager, not directly
 
 /**
- * Create a new game
+ * Create a new game state for a lobby
  */
-export function createGame(gameCode: string): GameState {
-    const game: GameState = {
+export function createGameState(gameCode: string): GameState {
+    return {
         gameCode,
         phase: 'waiting',
         round: 0,
@@ -34,25 +37,6 @@ export function createGame(gameCode: string): GameState {
         events: [],
         createdAt: Date.now(),
     };
-
-    currentGame = game;
-    return game;
-}
-
-/**
- * Reset and create a new game (for host)
- */
-export function resetGame(gameCode: string): GameState {
-    // Clear any existing game
-    currentGame = null;
-    return createGame(gameCode);
-}
-
-/**
- * Completely clear the current game (for host force end)
- */
-export function clearGame(): void {
-    currentGame = null;
 }
 
 /**
@@ -85,7 +69,6 @@ export function restartGameToWaiting(game: GameState): boolean {
         player.eliminationReason = undefined;
     }
 
-    saveGame(game);
     console.log(`[RESTART] Game ${game.gameCode} restarted to waiting phase with ${game.players.size} players`);
     return true;
 }
@@ -121,34 +104,10 @@ export function updateSettings(game: GameState, settings: Partial<GameSettings>)
         game.settings.requireZombieWin = settings.requireZombieWin;
     }
 
-    saveGame(game);
     return true;
 }
 
-/**
- * Get current game or create one
- */
-export function getOrCreateGame(gameCode: string): GameState {
-    if (currentGame && currentGame.gameCode === gameCode) {
-        return currentGame;
-    }
-
-    // Try to load from persistence
-    const loaded = loadPersistedState(gameCode);
-    if (loaded) {
-        currentGame = loaded;
-        return loaded;
-    }
-
-    return createGame(gameCode);
-}
-
-/**
- * Get current game
- */
-export function getGame(): GameState | null {
-    return currentGame;
-}
+// ============ Player Management ============
 
 /**
  * Add a player to the game
@@ -189,8 +148,15 @@ export function addPlayer(game: GameState, name: string, socketId: string): Play
     };
 
     game.players.set(player.id, player);
-    saveGame(game);
     return player;
+}
+
+/**
+ * Remove a player from the game (only during waiting phase)
+ */
+export function removePlayer(game: GameState, playerId: string): boolean {
+    if (game.phase !== 'waiting') return false;
+    return game.players.delete(playerId);
 }
 
 /**
@@ -223,6 +189,46 @@ export function findPlayerBySocketId(game: GameState, socketId: string): Player 
 export function getPlayer(game: GameState, playerId: string): Player | undefined {
     return game.players.get(playerId);
 }
+
+/**
+ * Handle player disconnection
+ */
+export function handleDisconnect(game: GameState, socketId: string): Player | undefined {
+    const player = findPlayerBySocketId(game, socketId);
+    if (player) {
+        player.socketId = null;
+        player.disconnectedAt = Date.now();
+    }
+    return player;
+}
+
+/**
+ * Handle player reconnection by name
+ */
+export function handleReconnect(game: GameState, name: string, socketId: string): Player | null {
+    const player = findPlayerByName(game, name);
+    if (player && player.status === 'alive') {
+        player.socketId = socketId;
+        player.disconnectedAt = undefined;
+        return player;
+    }
+    return null;
+}
+
+/**
+ * Handle player reconnection by ID
+ */
+export function handleReconnectById(game: GameState, playerId: string, socketId: string): Player | null {
+    const player = getPlayer(game, playerId);
+    if (player) {
+        player.socketId = socketId;
+        player.disconnectedAt = undefined;
+        return player;
+    }
+    return null;
+}
+
+// ============ Game Flow ============
 
 /**
  * Start the game - assigns teams, roles, and cards
@@ -303,8 +309,6 @@ export function startGame(game: GameState): boolean {
     game.round = 1;
     game.startedAt = Date.now();
 
-    saveGame(game);
-
     return true;
 }
 
@@ -317,37 +321,11 @@ export function completeIntro(game: GameState): boolean {
 
     game.phase = 'lobby';
     addEvent(game, 'round_start', `Round 1 begins`);
-    saveGame(game);
 
     return true;
 }
 
-/**
- * Handle player disconnection
- */
-export function handleDisconnect(game: GameState, socketId: string): Player | undefined {
-    const player = findPlayerBySocketId(game, socketId);
-    if (player) {
-        player.socketId = null;
-        player.disconnectedAt = Date.now();
-        saveGame(game);
-    }
-    return player;
-}
-
-/**
- * Handle player reconnection
- */
-export function handleReconnect(game: GameState, name: string, socketId: string): Player | null {
-    const player = findPlayerByName(game, name);
-    if (player && player.status === 'alive') {
-        player.socketId = socketId;
-        player.disconnectedAt = undefined;
-        saveGame(game);
-        return player;
-    }
-    return null;
-}
+// ============ Duel/Pairing Management ============
 
 /**
  * Select opponent in lobby - creates duel immediately if mutual selection
@@ -387,13 +365,11 @@ export function selectOpponent(game: GameState, playerId: string, opponentId: st
         player.currentDuelId = duel.id;
         opponent.currentDuelId = duel.id;
 
-        saveGame(game);
         return { success: true, duel };
     }
 
     // One-sided selection (invite sent, waiting for acceptance)
     player.selectedOpponentId = opponentId;
-    saveGame(game);
     return { success: true };
 }
 
@@ -421,7 +397,6 @@ export function cancelSelection(game: GameState, playerId: string): boolean {
         opponent.isPaired = false;
     }
 
-    saveGame(game);
     return true;
 }
 
@@ -443,7 +418,6 @@ export function declineInvite(game: GameState, playerId: string, inviterId: stri
     inviter.selectedOpponentId = null;
     inviter.isPaired = false;
 
-    saveGame(game);
     return true;
 }
 
@@ -469,6 +443,8 @@ export function allPlayersPaired(game: GameState): boolean {
 export function getAlivePlayers(game: GameState): Player[] {
     return Array.from(game.players.values()).filter(p => p.status === 'alive');
 }
+
+// ============ Phase Transitions ============
 
 /**
  * Transition to duel phase
@@ -507,8 +483,6 @@ export function startDuelPhase(game: GameState): void {
         processed.add(player.id);
         processed.add(opponent.id);
     }
-
-    saveGame(game);
 }
 
 /**
@@ -529,7 +503,6 @@ export function startMeetingPhase(game: GameState): void {
     }
 
     addEvent(game, 'round_end', `Round ${game.round} ended`);
-    saveGame(game);
 }
 
 /**
@@ -551,7 +524,6 @@ export function startNextRound(game: GameState): void {
     game.currentRoundDuels = [];
 
     addEvent(game, 'round_start', `Round ${game.round} begins`);
-    saveGame(game);
 }
 
 /**
@@ -560,8 +532,9 @@ export function startNextRound(game: GameState): void {
 export function endGame(game: GameState): void {
     game.phase = 'ended';
     game.endedAt = Date.now();
-    saveGame(game);
 }
+
+// ============ Player State Changes ============
 
 /**
  * Eliminate a player
@@ -572,8 +545,6 @@ export function eliminatePlayer(game: GameState, playerId: string, reason: strin
 
     player.status = 'eliminated';
     player.eliminationReason = reason;
-
-    saveGame(game);
 }
 
 /**
@@ -585,8 +556,6 @@ export function infectPlayer(game: GameState, playerId: string): void {
 
     player.role = 'zombie';
     player.zombieCard = createZombieCard();
-
-    saveGame(game);
 }
 
 /**
@@ -598,9 +567,9 @@ export function curePlayer(game: GameState, playerId: string): void {
 
     player.role = 'human';
     player.zombieCard = null;
-
-    saveGame(game);
 }
+
+// ============ Events ============
 
 /**
  * Add a public event
@@ -613,6 +582,15 @@ export function addEvent(game: GameState, type: PublicEvent['type'], message: st
         message,
     });
 }
+
+/**
+ * Get events for current round
+ */
+export function getCurrentRoundEvents(game: GameState): PublicEvent[] {
+    return game.events.filter(e => e.round === game.round);
+}
+
+// ============ State Views ============
 
 /**
  * Get public player view
@@ -772,20 +750,4 @@ export function getFinalReveal(game: GameState): FinalReveal {
         humanCount: humans.length,
         zombieCount: zombies.length,
     };
-}
-
-/**
- * Save game to persistence
- */
-function saveGame(game: GameState): void {
-    if (CONFIG.ENABLE_PERSISTENCE) {
-        persistState(game);
-    }
-}
-
-/**
- * Get events for current round
- */
-export function getCurrentRoundEvents(game: GameState): PublicEvent[] {
-    return game.events.filter(e => e.round === game.round);
 }

@@ -41,14 +41,14 @@ export function EliminatedScreen() {
     // If not eliminated, redirect
     useEffect(() => {
         if (!isEliminated && gameState?.phase !== 'ended') {
-            navigate('/lobby');
+            navigate(`/game/${gameState?.gameCode}/lobby`);
         }
     }, [isEliminated, gameState, navigate]);
 
     // If game ended, go to end screen
     useEffect(() => {
         if (gameState?.phase === 'ended') {
-            navigate('/end');
+            navigate(`/game/${gameState.gameCode}/end`);
         }
     }, [gameState, navigate]);
 

@@ -7,7 +7,7 @@ import {
     submitDuelAction, resolveDuel, isDuelReady, getDuelResultPrivate
 } from './duelResolver';
 import {
-    createGame, addPlayer, startGame, startDuelPhase, selectOpponent,
+    createGameState, addPlayer, startGame, startDuelPhase, selectOpponent,
     getPlayer
 } from './gameState';
 import { GameState, Player, Duel, NumberCard } from './types';
@@ -15,7 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Helper to create a test game with 6 players
 function createTestGame(): GameState {
-    const game = createGame('TEST');
+    const game = createGameState('TEST');
 
     // Add 6 players
     for (let i = 1; i <= 6; i++) {
@@ -256,7 +256,7 @@ describe('Duel Resolution', () => {
 
 describe('Game State', () => {
     test('creates game with correct initial state', () => {
-        const game = createGame('TEST123');
+        const game = createGameState('TEST123');
 
         expect(game.gameCode).toBe('TEST123');
         expect(game.phase).toBe('waiting');
@@ -265,7 +265,7 @@ describe('Game State', () => {
     });
 
     test('adds players correctly', () => {
-        const game = createGame('TEST');
+        const game = createGameState('TEST');
 
         const p1 = addPlayer(game, 'Alice', 'socket1');
         const p2 = addPlayer(game, 'Bob', 'socket2');

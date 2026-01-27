@@ -76,6 +76,8 @@ export function DuelScreen() {
             return;
         }
 
+        const lobbyCode = gameState.gameCode;
+
         // Stay on duel screen while we have an active duel
         if (currentDuel) {
             return;
@@ -83,19 +85,19 @@ export function DuelScreen() {
 
         // Only navigate away if duel is complete (no currentDuel)
         if (gameState.phase === 'lobby') {
-            navigate('/lobby');
+            navigate(`/game/${lobbyCode}/lobby`);
         } else if (gameState.phase === 'meeting') {
-            navigate('/meeting');
+            navigate(`/game/${lobbyCode}/meeting`);
         } else if (gameState.phase === 'ended') {
-            navigate('/end');
+            navigate(`/game/${lobbyCode}/end`);
         }
     }, [gameState, currentDuel, navigate]);
 
     useEffect(() => {
-        if (isEliminated) {
-            navigate('/eliminated');
+        if (isEliminated && gameState) {
+            navigate(`/game/${gameState.gameCode}/eliminated`);
         }
-    }, [isEliminated, navigate]);
+    }, [isEliminated, gameState, navigate]);
 
     // Show result modal when duel resolves
     useEffect(() => {

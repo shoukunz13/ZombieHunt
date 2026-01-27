@@ -1,6 +1,10 @@
 /**
  * ZOMBIE HUNT — Host Dashboard
  * 
+ * Supports two modes:
+ * - Admin mode (/host) - Global admin dashboard, requires HOST_PIN
+ * - Lobby host mode (/host/:lobbyCode) - Per-lobby control, requires hostToken
+ * 
  * Design: Cinematic control panel
  * - Same color palette as player screens
  * - Larger typography for TV/projector
@@ -9,6 +13,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useHost, HostProvider } from '../context/HostContext';
 import { ConnectionStatus, EventItem, DisplayTitle, SystemMessage } from '../components/shared';
 import { IntroVideo } from '../components/IntroVideo';
@@ -17,14 +22,14 @@ import { FinalReveal } from '../types';
 
 
 function HostDashboardContent() {
+    const navigate = useNavigate();
     const {
         isConnected, isAuthenticated, hostState, events, authError,
-        currentGameCode, authenticate, createGame, startGame, forcePhase, kickPlayer, endGame,
-        completeIntro, updateSettings, revealComplete, restartGame
+        lobbyCode, authenticate, startGame, forcePhase, kickPlayer, endGame,
+        completeIntro, updateSettings, revealComplete, restartGame, isAdminMode
     } = useHost();
 
     const [pin, setPin] = useState('');
-    const [newGameCode, setNewGameCode] = useState('');
     const [showReveal, setShowReveal] = useState(true);
 
     // Reset showReveal to true when game enters ended phase
@@ -62,13 +67,13 @@ function HostDashboardContent() {
 
     const finalReveal = getFinalReveal();
 
-    // Auth screen
-    if (!isAuthenticated) {
+    // Auth screen for admin mode (requires PIN)
+    if (isAdminMode && !isAuthenticated) {
         return (
             <div className="container">
                 <div className="screen screen-centered">
                     <div style={{ marginBottom: 'var(--space-3xl)' }}>
-                        <DisplayTitle size="3xl">HOST</DisplayTitle>
+                        <DisplayTitle size="3xl">ADMIN</DisplayTitle>
                         <DisplayTitle size="3xl">CONTROL</DisplayTitle>
                     </div>
 
@@ -117,13 +122,42 @@ function HostDashboardContent() {
         );
     }
 
-    const handleCreateGame = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (newGameCode.trim()) {
-            createGame(newGameCode.trim());
-            setNewGameCode('');
-        }
-    };
+    // Auth screen for lobby host mode (requires valid hostToken)
+    if (!isAdminMode && !isAuthenticated) {
+        return (
+            <div className="container">
+                <div className="screen screen-centered">
+                    <div style={{ marginBottom: 'var(--space-3xl)' }}>
+                        <DisplayTitle size="3xl">HOST</DisplayTitle>
+                        <DisplayTitle size="3xl">ACCESS</DisplayTitle>
+                    </div>
+
+                    <SystemMessage>INVALID OR EXPIRED SESSION</SystemMessage>
+
+                    <ConnectionStatus isConnected={isConnected} />
+
+                    {authError && (
+                        <div style={{
+                            marginBottom: 'var(--space-md)',
+                            padding: 'var(--space-md)',
+                            border: '1px solid var(--accent-red)',
+                            maxWidth: '280px'
+                        }}>
+                            <span className="text-system text-red">{authError}</span>
+                        </div>
+                    )}
+
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => navigate('/create')}
+                        style={{ marginTop: 'var(--space-xl)' }}
+                    >
+                        CREATE NEW LOBBY
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     // Dashboard
     return (
@@ -161,23 +195,29 @@ function HostDashboardContent() {
                     <ConnectionStatus isConnected={isConnected} />
                 </div>
 
-                {/* Game Session */}
+                {/* Lobby Code Display */}
                 <div className="host-section">
-                    <h3>GAME SESSION</h3>
-                    {currentGameCode ? (
+                    <h3>LOBBY</h3>
+                    {lobbyCode ? (
                         <div style={{
                             textAlign: 'center',
                             padding: 'var(--space-xl)',
                             border: '2px solid var(--accent-red)',
                             marginBottom: 'var(--space-md)'
                         }}>
-                            <SystemMessage>ACCESS CODE</SystemMessage>
+                            <SystemMessage>SHARE THIS CODE</SystemMessage>
                             <p className="heading-display" style={{
                                 fontSize: 'var(--font-size-4xl)',
                                 letterSpacing: '0.2em',
                                 color: 'var(--accent-red)'
                             }}>
-                                {currentGameCode}
+                                {lobbyCode}
+                            </p>
+                            <p className="text-system" style={{
+                                color: 'var(--text-muted)',
+                                marginTop: 'var(--space-sm)'
+                            }}>
+                                Players join at: {window.location.origin}/game/{lobbyCode}
                             </p>
                         </div>
                     ) : (
@@ -186,30 +226,16 @@ function HostDashboardContent() {
                             padding: 'var(--space-xl)',
                             border: '1px solid var(--border-muted)'
                         }}>
-                            <SystemMessage>NO ACTIVE GAME</SystemMessage>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleCreateGame}>
-                        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                            <input
-                                type="text"
-                                className="input"
-                                placeholder="NEW GAME CODE_"
-                                value={newGameCode}
-                                onChange={(e) => setNewGameCode(e.target.value.toUpperCase())}
-                                style={{ flex: 1 }}
-                                maxLength={12}
-                            />
+                            <SystemMessage>NO ACTIVE LOBBY</SystemMessage>
                             <button
-                                type="submit"
                                 className="btn btn-primary"
-                                disabled={!newGameCode.trim()}
+                                onClick={() => navigate('/create')}
+                                style={{ marginTop: 'var(--space-md)' }}
                             >
-                                {currentGameCode ? 'RESET' : 'CREATE'}
+                                CREATE LOBBY
                             </button>
                         </div>
-                    </form>
+                    )}
                 </div>
 
                 {/* Game Status */}
@@ -448,7 +474,7 @@ function HostDashboardContent() {
                                     endGame();
                                 }
                             }}
-                            disabled={!currentGameCode}
+                            disabled={!lobbyCode}
                         >
                             END GAME
                         </button>

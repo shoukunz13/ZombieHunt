@@ -1,9 +1,12 @@
 /**
  * Zombie Hunt - Socket Context
  * React context for Socket.io connection and game state management.
+ * 
+ * Multi-tenant architecture: Uses lobbyCode from URL params.
  */
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import {
     PlayerPublic, PlayerPrivate, GameStatePublic, PublicEvent,
@@ -13,44 +16,55 @@ import {
 
 // Get server URL from environment or default to localhost
 const getServerUrl = (): string => {
-    // Use current hostname for LAN play (useful when accessing via IP)
     const port = 3001;
     if (typeof window !== 'undefined') {
+        // In production, nginx proxies /socket.io/ to the API server
+        if (import.meta.env.PROD) {
+            return window.location.origin;
+        }
+        // In development, connect directly to API server
         return `http://${window.location.hostname}:${port}`;
     }
     return `http://localhost:${port}`;
 };
 
-// Session storage for reconnection
-const SESSION_KEY = 'zombieHuntSession';
-
-interface GameSession {
-    playerId: string;
-    playerName: string;
-    gameCode: string;
-}
-
-const saveSession = (session: GameSession) => {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+// Session storage helpers (lobby-specific)
+const getSessionKey = (lobbyCode: string, type: 'playerId' | 'playerToken' | 'playerName'): string => {
+    return `${type}:${lobbyCode}`;
 };
 
-const loadSession = (): GameSession | null => {
+const saveSession = (lobbyCode: string, playerId: string, playerToken: string, playerName: string) => {
+    sessionStorage.setItem(getSessionKey(lobbyCode, 'playerId'), playerId);
+    sessionStorage.setItem(getSessionKey(lobbyCode, 'playerToken'), playerToken);
+    sessionStorage.setItem(getSessionKey(lobbyCode, 'playerName'), playerName);
+};
+
+const loadSession = (lobbyCode: string): { playerId: string; playerToken: string; playerName: string } | null => {
     try {
-        const stored = localStorage.getItem(SESSION_KEY);
-        return stored ? JSON.parse(stored) : null;
+        const playerId = sessionStorage.getItem(getSessionKey(lobbyCode, 'playerId'));
+        const playerToken = sessionStorage.getItem(getSessionKey(lobbyCode, 'playerToken'));
+        const playerName = sessionStorage.getItem(getSessionKey(lobbyCode, 'playerName'));
+        
+        if (playerId && playerToken && playerName) {
+            return { playerId, playerToken, playerName };
+        }
+        return null;
     } catch {
         return null;
     }
 };
 
-const clearSession = () => {
-    localStorage.removeItem(SESSION_KEY);
+const clearSession = (lobbyCode: string) => {
+    sessionStorage.removeItem(getSessionKey(lobbyCode, 'playerId'));
+    sessionStorage.removeItem(getSessionKey(lobbyCode, 'playerToken'));
+    sessionStorage.removeItem(getSessionKey(lobbyCode, 'playerName'));
 };
 
 interface GameContextType {
     // Connection
     socket: Socket | null;
     isConnected: boolean;
+    lobbyCode: string | null;
 
     // Player state
     playerId: string | null;
@@ -86,7 +100,7 @@ interface GameContextType {
     error: string | null;
 
     // Actions
-    joinGame: (gameCode: string, name: string) => void;
+    joinGame: (name: string) => void;
     selectOpponent: (opponentId: string) => void;
     cancelSelection: () => void;
     declineInvite: (inviterId: string) => void;
@@ -106,6 +120,9 @@ interface GameContextType {
 const GameContext = createContext<GameContextType | null>(null);
 
 export function GameProvider({ children }: { children: ReactNode }) {
+    const { lobbyCode } = useParams<{ lobbyCode: string }>();
+    const navigate = useNavigate();
+    
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
 
@@ -139,12 +156,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const [error, setError] = useState<string | null>(null);
 
     // Session state  
-    const [hasSession, setHasSession] = useState<boolean>(() => loadSession() !== null);
+    const [hasSession, setHasSession] = useState<boolean>(() => {
+        if (!lobbyCode) return false;
+        return loadSession(lobbyCode) !== null;
+    });
     const [lobbyDestroyed, setLobbyDestroyed] = useState(false);
     const [lobbyRestarted, setLobbyRestarted] = useState(false);
 
     // Initialize socket connection
     useEffect(() => {
+        if (!lobbyCode) return;
+
         const newSocket = io(getServerUrl(), {
             transports: ['websocket', 'polling'],
             autoConnect: true,
@@ -155,13 +177,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setIsConnected(true);
 
             // Try to reconnect from saved session
-            const session = loadSession();
+            const session = loadSession(lobbyCode);
             if (session) {
-                console.log('Attempting to rejoin from session:', session);
-                newSocket.emit('rejoin_game', {
-                    playerId: session.playerId,
-                    gameCode: session.gameCode,
-                    name: session.playerName,
+                console.log('Attempting to reconnect to lobby:', lobbyCode);
+                newSocket.emit('reconnect_lobby', {
+                    lobbyCode,
+                    playerToken: session.playerToken,
                 });
             }
         });
@@ -175,20 +196,35 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setError(data.message);
         });
 
+        newSocket.on('lobby_not_found', () => {
+            setError('Lobby not found or expired');
+            clearSession(lobbyCode);
+            setHasSession(false);
+            // Navigate back to join screen after delay
+            setTimeout(() => {
+                navigate('/join?error=not_found');
+            }, 2000);
+        });
+
+        newSocket.on('lobby_full', () => {
+            setError('Lobby is full');
+        });
+
         // Game events
-        newSocket.on('joined', (data) => {
+        newSocket.on('joined', (data: {
+            playerId: string;
+            playerToken: string;
+            gameStatePublic: GameStatePublic;
+            yourPrivateState: PlayerPrivate;
+        }) => {
             setPlayerId(data.playerId);
             setGameState(data.gameStatePublic);
             setPrivateState(data.yourPrivateState);
+            setPlayerName(data.yourPrivateState?.name || null);
 
             // Save session for reconnection
-            if (data.playerId && data.gameStatePublic?.gameCode) {
-                const session: GameSession = {
-                    playerId: data.playerId,
-                    playerName: data.yourPrivateState?.name || '',
-                    gameCode: data.gameStatePublic.gameCode,
-                };
-                saveSession(session);
+            if (data.playerId && data.playerToken && data.yourPrivateState?.name) {
+                saveSession(lobbyCode, data.playerId, data.playerToken, data.yourPrivateState.name);
                 setHasSession(true);
             }
         });
@@ -209,7 +245,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
                 phase: data.phase,
                 round: data.round,
                 phaseEndsAt: data.endsAt,
-                requireZombieWin: data.requireZombieWin ?? prev.requireZombieWin, // Update competitive setting from server
+                requireZombieWin: data.requireZombieWin ?? prev.requireZombieWin,
             } : null);
 
             // Reset duel state on phase change
@@ -276,7 +312,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setError('Game has been terminated by host');
 
             // Clear session storage and set redirect flag
-            clearSession();
+            clearSession(lobbyCode);
             setHasSession(false);
             setLobbyDestroyed(true);
         });
@@ -301,15 +337,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return () => {
             newSocket.disconnect();
         };
-    }, []);
+    }, [lobbyCode, navigate]);
 
     // Actions
-    const joinGame = useCallback((gameCode: string, name: string) => {
-        if (socket && isConnected) {
+    const joinGame = useCallback((name: string) => {
+        if (socket && isConnected && lobbyCode) {
             setPlayerName(name);
-            socket.emit('join_game', { gameCode, name });
+            socket.emit('join_lobby', { lobbyCode, playerName: name });
         }
-    }, [socket, isConnected]);
+    }, [socket, isConnected, lobbyCode]);
 
     const selectOpponent = useCallback((opponentId: string) => {
         if (socket) {
@@ -361,8 +397,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const leaveGame = useCallback(() => {
+        if (!lobbyCode) return;
+        
         // Clear session from storage
-        clearSession();
+        clearSession(lobbyCode);
         setHasSession(false);
 
         // Emit leave event to server
@@ -385,7 +423,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setYourOutcome(null);
         setIsEliminated(false);
         setEliminationReason(null);
-    }, [socket]);
+    }, [socket, lobbyCode]);
 
     const clearLobbyDestroyed = useCallback(() => {
         setLobbyDestroyed(false);
@@ -404,6 +442,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const value: GameContextType = {
         socket,
         isConnected,
+        lobbyCode: lobbyCode || null,
         playerId,
         playerName,
         privateState,

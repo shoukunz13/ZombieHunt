@@ -15,7 +15,7 @@ import { DisplayTitle, SystemMessage, Spinner } from '../components/shared';
 export function EndScreen() {
     const navigate = useNavigate();
     const {
-        privateState, finalReveal, yourOutcome,
+        privateState, finalReveal, yourOutcome, gameState,
         lobbyDestroyed, clearLobbyDestroyed,
         lobbyRestarted, clearLobbyRestarted,
         leaveGame
@@ -31,11 +31,11 @@ export function EndScreen() {
 
     // Auto-redirect to lobby when host clicks Play Again
     useEffect(() => {
-        if (lobbyRestarted) {
+        if (lobbyRestarted && gameState) {
             clearLobbyRestarted();
-            navigate('/lobby');
+            navigate(`/game/${gameState.gameCode}/lobby`);
         }
-    }, [lobbyRestarted, clearLobbyRestarted, navigate]);
+    }, [lobbyRestarted, clearLobbyRestarted, navigate, gameState]);
 
     if (!finalReveal) {
         return (
@@ -195,12 +195,12 @@ export function EndScreen() {
 
                 {/* Actions */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                    {lobbyRestarted ? (
+                    {lobbyRestarted && gameState ? (
                         <button
                             className="btn btn-primary"
                             onClick={() => {
                                 clearLobbyRestarted();
-                                navigate('/lobby');
+                                navigate(`/game/${gameState.gameCode}/lobby`);
                             }}
                         >
                             RETURN TO LOBBY
