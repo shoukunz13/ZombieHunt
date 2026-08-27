@@ -8,10 +8,17 @@ export const CONFIG = {
     PORT: parseInt(process.env.PORT || '3001', 10),
     // In production, require HOST_PIN from environment; in dev allow default
     HOST_PIN: (() => {
-        const pin = process.env.HOST_PIN;
-        if (process.env.NODE_ENV === 'production' && (!pin || pin.length < 6)) {
-            console.error('ERROR: HOST_PIN must be set to at least 6 characters in production');
-            process.exit(1);
+        const pin = process.env.HOST_PIN?.trim();
+        const insecurePins = new Set(['1234', '123456', '000000', 'password', 'admin', 'zombie']);
+        if (process.env.NODE_ENV === 'production') {
+            if (!pin || pin.length < 10) {
+                console.error('ERROR: HOST_PIN must be set to at least 10 characters in production');
+                process.exit(1);
+            }
+            if (insecurePins.has(pin.toLowerCase())) {
+                console.error('ERROR: HOST_PIN is too weak in production, choose a stronger value');
+                process.exit(1);
+            }
         }
         return pin || '1234';
     })(),

@@ -26,7 +26,7 @@ This document details the security measures implemented in Zombie Hunt for safe 
 
 | Feature | Implementation |
 |---------|----------------|
-| Host PIN | Required via `HOST_PIN` env var (min 6 chars in production) |
+| Host PIN | Required via `HOST_PIN` env var (min 10 chars in production) |
 | PIN Protection | Rate limited (5 attempts/min, then 5min block) |
 | Host Auth | Socket ID tracked after PIN verification |
 | Player Identity | Server-generated UUID, cannot be forged |
@@ -119,17 +119,17 @@ origin: isDevelopment ? '*' : ALLOWED_ORIGINS
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NODE_ENV` | Yes | Set to `production` for public release |
-| `HOST_PIN` | Yes (prod) | Min 6 characters |
+| `HOST_PIN` | Yes (prod) | Min 10 characters |
 | `ALLOWED_ORIGINS` | Yes (prod) | Comma-separated list of allowed origins |
 | `PORT` | No | Default: 3001 |
-| `METRICS_KEY` | No | Key to access `/api/metrics` in production |
+| `METRICS_KEY` | Recommended | If unset, `/api/metrics` is disabled in production |
 
 ---
 
 ## Deployment Checklist
 
 - [ ] Set `NODE_ENV=production`
-- [ ] Set strong `HOST_PIN` (12+ chars recommended)
+- [ ] Set strong `HOST_PIN` (12+ chars recommended, minimum 10)
 - [ ] Set `ALLOWED_ORIGINS` to your domain only
 - [ ] Deploy behind HTTPS (Let's Encrypt, Cloudflare)
 - [ ] Configure reverse proxy if using Nginx/Cloudflare
