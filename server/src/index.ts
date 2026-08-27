@@ -14,18 +14,38 @@ import { initializeSocketHandlers } from './socketHandlers';
 const app = express();
 const httpServer = createServer(app);
 
-// Parse allowed origins from environment or use defaults
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-];
-
-// In development, allow all origins for LAN testing
 const isDevelopment = process.env.NODE_ENV !== 'production';
-if (isDevelopment) {
-    // Allow any origin in development for LAN play
-    ALLOWED_ORIGINS.push('*');
-}
+const METRICS_KEY = process.env.METRICS_KEY?.trim();
+
+// Parse allowed origins from environment with safe defaults
+const ALLOWED_ORIGINS = (() => {
+    const configuredOrigins = process.env.ALLOWED_ORIGINS
+        ?.split(',')
+        .map(origin => origin.trim())
+        .filter(Boolean) || [];
+
+    if (!isDevelopment) {
+        if (configuredOrigins.length === 0) {
+            console.error('ERROR: ALLOWED_ORIGINS must be set in production');
+            process.exit(1);
+        }
+        if (configuredOrigins.includes('*')) {
+            console.error('ERROR: ALLOWED_ORIGINS cannot contain wildcard (*) in production');
+            process.exit(1);
+        }
+        return configuredOrigins;
+    }
+
+    if (configuredOrigins.length > 0) {
+        return configuredOrigins;
+    }
+
+    return [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        '*',
+    ];
+})();
 
 // Trust proxy for correct IP detection behind Nginx/Cloudflare
 // Set to 1 for single proxy, or 'loopback' for localhost only
@@ -62,7 +82,7 @@ function normalizeIP(ip: string): string {
 const io = new Server(httpServer, {
     cors: {
         origin: isDevelopment ? '*' : (origin, callback) => {
-            if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+            if (origin && ALLOWED_ORIGINS.includes(origin)) {
                 callback(null, true);
             } else {
                 callback(new Error('CORS not allowed'));
@@ -122,7 +142,13 @@ app.use(helmet({
 
 // CORS middleware with same origin checking
 app.use(cors({
-    origin: isDevelopment ? '*' : ALLOWED_ORIGINS,
+    origin: isDevelopment ? '*' : (origin, callback) => {
+        if (origin && ALLOWED_ORIGINS.includes(origin)) {
+            callback(null, true);
+            return;
+        }
+        callback(new Error('CORS not allowed'));
+    },
     credentials: true,
 }));
 
@@ -149,9 +175,17 @@ app.get('/api/info', (_req, res) => {
 
 // Metrics endpoint (protected in production)
 app.get('/api/metrics', (req, res) => {
-    if (!isDevelopment && req.headers['x-metrics-key'] !== process.env.METRICS_KEY) {
-        res.status(403).json({ error: 'Forbidden' });
-        return;
+    if (!isDevelopment) {
+        if (!METRICS_KEY) {
+            res.status(503).json({ error: 'Metrics disabled' });
+            return;
+        }
+        const headerValue = req.headers['x-metrics-key'];
+        const providedKey = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+        if (providedKey !== METRICS_KEY) {
+            res.status(403).json({ error: 'Forbidden' });
+            return;
+        }
     }
     res.json({
         ...metrics,

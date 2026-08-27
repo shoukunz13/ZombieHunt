@@ -98,7 +98,7 @@ This will start:
 
 Access: `http://localhost:3000/host`
 
-Default PIN: `1234` (set via `HOST_PIN` environment variable)
+Default PIN in local development: `1234` (set via `HOST_PIN` environment variable)
 
 ### Host Controls
 - **Create Game**: Set up a new game with a custom code
@@ -142,7 +142,7 @@ Edit `server/src/config.ts`:
 ```typescript
 export const CONFIG = {
   PORT: 3001,
-  HOST_PIN: '1234',
+  HOST_PIN: process.env.HOST_PIN, // Required in production, 10+ chars recommended
   
   TEAM_COUNT: 4,
   MIN_PLAYERS: 4,
@@ -257,6 +257,11 @@ zombie-hunt/
 - Use the correct LAN IP (not localhost)
 - Check that server is running with `0.0.0.0` binding
 
+### Public deployment startup fails
+- Set `NODE_ENV=production`
+- Set `HOST_PIN` to a strong value (minimum 10 chars)
+- Set `ALLOWED_ORIGINS` to your exact frontend origin(s), comma-separated
+
 ### Game state corrupted
 - Delete `game_state.json` in the server folder
 - Restart the server
@@ -273,4 +278,3 @@ MIT
 ---
 
 **Have fun hunting! 🧟‍♂️🔫**
-
